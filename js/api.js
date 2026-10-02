@@ -1,5 +1,5 @@
-/* ===== CONFIG: вставте URL розгорнутого Google Apps Script (Web App) ===== */
-const CONFIG=https://script.google.com/macros/s/AKfycbzLoRlej95uYgcSPml9MvCnzGBe1GxalEy7VsGwE8_vEfUVnRw8xROJ3efg0a7MilSk8w/exec;
+/* ===== CONFIG ===== */
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbzLoRlej95uYgcSPml9MvCnzGBe1GxalEy7VsGwE8_vEfUVnRw8xROJ3efg0a7MilSk8w/exec",POLL_MS:3000,CAPACITY:3500};
 
 /* ===== api.js ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false};
