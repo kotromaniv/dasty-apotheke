@@ -1,5 +1,5 @@
 /* ===== CONFIG: вставте URL розгорнутого Google Apps Script (Web App) ===== */
-const CONFIG=https://script.google.com/macros/s/AKfycbyLU7G4QwKJxY4drX4fjXjdlqwTSzHfvDpXzNS0Iu7XGv-c_0Mr5vOM6fxZcD5U1iM11g/exec;
+const CONFIG=https://script.google.com/macros/s/AKfycbzLoRlej95uYgcSPml9MvCnzGBe1GxalEy7VsGwE8_vEfUVnRw8xROJ3efg0a7MilSk8w/exec;
 
 /* ===== api.js ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false};
