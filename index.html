@@ -10,9 +10,9 @@
 :root{--bg:#050e17;--card:rgba(15,38,55,.9);--bd:rgba(130,200,225,.12);--tx:#eaf3f7;--mu:#8ea6b5;--ac:#f7b733;--ac2:#e39a0c;--gold:#f7b733;--tl:#2fd9bb;--ok:#4ade80;--er:#fb7185;--wr:#fbbf24;--r:18px}
 *{box-sizing:border-box;margin:0}
 html,body{height:100%}
-body{font:15px/1.55 "Onest","Segoe UI",system-ui,sans-serif;color:var(--tx);background:radial-gradient(900px 500px at 85% -5%,rgba(20,90,110,.35),transparent 60%),linear-gradient(170deg,#081826,#050e17 60%,#06141b);overflow-x:hidden}
+body{font:13px/1.5 "Onest","Segoe UI",system-ui,sans-serif;color:var(--tx);background:radial-gradient(900px 500px at 85% -5%,rgba(20,90,110,.35),transparent 60%),linear-gradient(170deg,#081826,#050e17 60%,#06141b);overflow-x:hidden}
 h1,h2,h3{font-family:"Playfair Display",Georgia,serif;font-weight:700}
-button,input,textarea{font:inherit;color:inherit}
+button,input,textarea,select{font:inherit;color:inherit}
 .hide{display:none!important}
 #app,#login{position:relative;z-index:2}
 #decor{position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden;contain:strict}
@@ -20,136 +20,140 @@ button,input,textarea{font:inherit;color:inherit}
 .o1{background:radial-gradient(circle,rgba(47,217,187,.16),transparent 65%);top:-220px;left:-180px}
 .o2{background:radial-gradient(circle,rgba(247,183,51,.11),transparent 65%);bottom:-260px;right:-180px;animation-delay:-11s}
 #app{display:flex;min-height:100%}
-nav{width:272px;background:linear-gradient(180deg,#0b2234,#08192a);border-right:1px solid var(--bd);padding:18px 14px 12px;position:sticky;top:0;height:100vh;overflow:auto;flex-shrink:0;display:flex;flex-direction:column}
-nav .brand{display:flex;align-items:center;gap:10px;font-family:"Playfair Display",serif;font-size:19px;padding:2px 10px 14px;color:var(--ac)}
-nav .brand svg{width:28px;color:var(--tl)}
-.ng{font-size:12px;letter-spacing:1.2px;color:#7f98a8;padding:16px 12px 6px;font-weight:700}
-nav a{position:relative;display:flex;gap:14px;align-items:center;padding:11px 14px;border-radius:14px;color:#d3e2ea;cursor:pointer;margin-bottom:3px;border:2px solid transparent;font-size:16px;transition:background .2s,transform .2s}
-nav a i{font-style:normal;font-size:22px;width:28px;text-align:center}
+nav{width:232px;background:linear-gradient(180deg,#0b2234,#08192a);border-right:1px solid var(--bd);padding:14px 10px 10px;position:sticky;top:0;height:100vh;overflow:auto;flex-shrink:0;display:flex;flex-direction:column}
+nav .brand{display:flex;align-items:center;gap:10px;font-family:"Playfair Display",serif;font-size:17px;padding:2px 10px 12px;color:var(--ac)}
+nav .brand svg{width:24px;color:var(--tl)}
+.ng{font-size:10.5px;letter-spacing:1.2px;color:#7f98a8;padding:12px 10px 4px;font-weight:700}
+nav a{position:relative;display:flex;gap:10px;align-items:center;padding:8px 11px;border-radius:12px;color:#d3e2ea;cursor:pointer;margin-bottom:3px;border:2px solid transparent;font-size:13.5px;transition:background .2s,transform .2s}
+nav a i{font-style:normal;font-size:17px;width:22px;text-align:center}
 nav a:hover{background:rgba(255,255,255,.05);transform:translateX(3px)}
 nav a.on{color:var(--ac);border-color:var(--ac);background:linear-gradient(90deg,rgba(247,183,51,.12),rgba(247,183,51,.02));box-shadow:0 0 18px rgba(247,183,51,.22)}
-nav a.on::before{content:"";position:absolute;left:-14px;top:12px;bottom:12px;width:4px;border-radius:0 4px 4px 0;background:var(--ac)}
+nav a.on::before{content:"";position:absolute;left:-10px;top:10px;bottom:10px;width:4px;border-radius:0 4px 4px 0;background:var(--ac)}
 .usr{margin-top:auto;padding-top:12px;border-top:1px solid var(--bd);display:flex;align-items:center;gap:10px}
-.av{width:42px;height:42px;border-radius:50%;background:linear-gradient(135deg,#ffd366,#e39a0c);color:#2a1a00;font-weight:800;display:grid;place-items:center;flex-shrink:0;border:2px solid rgba(255,255,255,.2)}
+.av{width:36px;height:36px;font-size:13px;border-radius:50%;background:linear-gradient(135deg,#ffd366,#e39a0c);color:#2a1a00;font-weight:800;display:grid;place-items:center;flex-shrink:0;border:2px solid rgba(255,255,255,.2)}
 .un{min-width:0;flex:1;display:flex;flex-direction:column;line-height:1.2}
 .un b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.un span{font-size:12px;color:var(--mu)}
+.un span{font-size:11px;color:var(--mu)}
 .lo{background:none;border:0;color:var(--mu);cursor:pointer;padding:6px;border-radius:10px}
 .lo:hover{color:var(--ac);background:rgba(255,255,255,.06)}
-.lo svg{width:22px;display:block}
+.lo svg{width:20px;display:block}
 #wrap{flex:1;min-width:0;display:flex;flex-direction:column}
-#hd{height:66px;display:flex;align-items:center;gap:10px;padding:0 32px;border-bottom:1px solid var(--bd);background:rgba(6,16,25,.85);font-size:18px;position:sticky;top:0;z-index:5}
-#hd span{font-size:22px}
-main{flex:1;padding:26px 32px}
+#hd{height:52px;display:flex;align-items:center;gap:10px;padding:0 24px;border-bottom:1px solid var(--bd);background:rgba(6,16,25,.85);font-size:15px;position:sticky;top:0;z-index:5}
+#hd span{font-size:18px}
+main{flex:1;padding:18px 24px}
 main.fx{animation:rise .3s both}
-.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:16px}
 .top>div{display:flex;gap:8px;flex-wrap:wrap}
 #view>.top{justify-content:flex-end}
 #view>.top h2{display:none}
-h2{font-size:24px;color:#f3fbf9}
-.meta{color:var(--mu);font-size:14px}
+h2{font-size:19px;color:#f3fbf9}
+.meta{color:var(--mu);font-size:12px}
 
-.btn{position:relative;overflow:hidden;background:linear-gradient(135deg,#ffd366,#f2a516);color:#2a1a00;border:0;border-radius:12px;padding:10px 20px;font-weight:700;cursor:pointer;box-shadow:0 8px 22px -10px rgba(247,183,51,.8);transition:transform .15s,filter .15s}
+.btn{position:relative;overflow:hidden;background:linear-gradient(135deg,#ffd366,#f2a516);color:#2a1a00;border:0;border-radius:10px;padding:8px 16px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 8px 22px -10px rgba(247,183,51,.8);transition:transform .15s,filter .15s}
 .btn::after{content:"";position:absolute;inset:0;background:linear-gradient(110deg,transparent 30%,rgba(255,255,255,.5) 50%,transparent 70%);transform:translateX(-120%)}
 .btn:hover::after{transform:translateX(120%);transition:transform .6s}
 .btn:hover{transform:translateY(-2px)}
 .btn:active{transform:scale(.97)}
 .btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
-.btn.big{padding:13px 26px;font-size:16px}
-.btn.ghost{background:rgba(255,255,255,.06);color:var(--tx);border:1px solid var(--bd);padding:7px 13px;font-weight:600;box-shadow:none}
-.pill{background:rgba(47,217,187,.1);color:var(--tl);border:1px solid rgba(47,217,187,.3);border-radius:99px;padding:5px 15px;cursor:pointer;font-size:13px}
+.btn.big{padding:10px 20px;font-size:14px}
+.btn.ghost{background:rgba(255,255,255,.06);color:var(--tx);border:1px solid var(--bd);padding:6px 11px;font-size:12px;font-weight:600;box-shadow:none}
+.pill{background:rgba(47,217,187,.1);color:var(--tl);border:1px solid rgba(47,217,187,.3);border-radius:99px;padding:5px 15px;cursor:pointer;font-size:12px}
 .pill:hover{background:rgba(47,217,187,.2)}
-input,textarea{background:rgba(0,0,0,.28);border:1px solid var(--bd);border-radius:12px;padding:11px 14px;width:100%;outline:none;transition:border-color .2s}
-input:focus,textarea:focus{border-color:var(--ac)}
+input,textarea,select{background:rgba(0,0,0,.28);border:1px solid var(--bd);border-radius:10px;padding:8px 11px;width:100%;outline:none;transition:border-color .2s}
+input:focus,textarea:focus,select:focus{border-color:var(--ac)}
+select option{background:#0d2133;color:#eaf3f7}
 textarea{resize:vertical}
-label{display:block;color:var(--mu);font-size:13px;margin:12px 0 5px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:var(--r);padding:22px;transition:transform .2s,border-color .2s,box-shadow .2s}
+label{display:block;color:var(--mu);font-size:12px;margin:10px 0 4px}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:15px;padding:16px;transition:transform .2s,border-color .2s,box-shadow .2s}
 .grid>.card:hover,.sc:hover{border-color:rgba(247,183,51,.55);box-shadow:0 0 22px rgba(247,183,51,.15);transform:translateY(-3px)}
 #login{min-height:100%;display:grid;place-items:center;padding:20px;overflow:hidden}
-.scene{position:absolute;left:0;right:0;bottom:0;color:var(--tl);opacity:.14;pointer-events:none}
-.scene svg{width:100%;display:block}
-.lbox{position:relative;width:min(410px,100%);padding:32px;animation:rise .5s both;z-index:2}
-.logo{width:72px;height:72px;margin:0 auto 8px;color:var(--tl);animation:bob 5s ease-in-out infinite}
-h1{font-size:30px;text-align:center;color:var(--ac)}
-.sub{text-align:center;color:var(--mu);margin-bottom:10px}
-.err{color:var(--er);min-height:20px;margin-top:8px;font-size:14px}
+.scene{position:absolute;left:0;right:0;bottom:0;color:var(--tl);opacity:.24;pointer-events:none}
+.scene svg{width:100%;display:block;overflow:visible}
+.scene g>*{animation:sway var(--d,7s) ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
+.scene g>:nth-child(3n){--d:8.5s;animation-delay:-2s}
+.scene g>:nth-child(3n+1){--d:6.5s;animation-delay:-4s}
+.scene g>:nth-child(4n){animation-direction:reverse}
+.lbox{position:relative;width:min(370px,100%);padding:26px;animation:rise .5s both;z-index:2}
+.logo{width:60px;height:60px;margin:0 auto 8px;color:var(--tl);animation:bob 5s ease-in-out infinite}
+h1{font-size:24px;text-align:center;color:var(--ac)}
+.sub{text-align:center;color:var(--mu);margin-bottom:10px;font-size:12px}
+.err{color:var(--er);min-height:20px;margin-top:8px;font-size:13px}
 .spin{width:15px;height:15px;border:2px solid rgba(42,26,0,.3);border-top-color:#2a1a00;border-radius:50%;display:inline-block;vertical-align:-3px;animation:rot .7s linear infinite;margin-right:6px}
 .ld{position:relative;width:64px;height:64px;margin:18px auto;color:var(--tl)}
 .ld svg{width:100%;animation:bob 1.6s ease-in-out infinite}
 .ld i{position:absolute;bottom:8px;left:28px;width:7px;height:7px;border-radius:50%;background:var(--tl);opacity:0;animation:bub 1.6s ease-in infinite}
 .ld i:nth-of-type(2){left:34px;animation-delay:.5s}.ld i:nth-of-type(3){left:24px;animation-delay:1s}
 .hrow{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px}
-.wel{font-size:36px;color:var(--ac);text-shadow:0 0 26px rgba(247,183,51,.25);text-align:left}
-.scs{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:16px;margin-bottom:18px}
-.sc{display:flex;flex-direction:column;gap:6px;animation:rise .45s both}
+.scs{display:grid;grid-template-columns:repeat(auto-fit,minmax(185px,1fr));gap:13px;margin-bottom:16px}
+.sc{display:flex;flex-direction:column;gap:5px;animation:rise .45s both}
 .sc:nth-child(2){animation-delay:.04s}.sc:nth-child(3){animation-delay:.08s}.sc:nth-child(4){animation-delay:.12s}.sc:nth-child(n+5){animation-delay:.16s}
 .sh{display:flex;justify-content:space-between;align-items:center;color:#c4d6df}
-.ci{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,.06);display:grid;place-items:center;font-size:22px;font-style:normal}
-.sc b{font-size:36px;font-weight:800;line-height:1.1}
+.ci{width:36px;height:36px;border-radius:12px;background:rgba(255,255,255,.06);display:grid;place-items:center;font-size:18px;font-style:normal}
+.sc b{font-size:26px;font-weight:800;line-height:1.1}
 .sc b.ok{color:var(--ok)}.sc b.wr{color:var(--wr)}.sc b.er{color:var(--er)}
-.sc small{color:var(--mu);font-size:13px}
-.two{display:grid;grid-template-columns:1.5fr 1fr;gap:16px;margin-bottom:16px}
-.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-.ch h3{font-size:20px}
+.sc small{color:var(--mu);font-size:12px}
+.two{display:grid;grid-template-columns:1.5fr 1fr;gap:14px;margin-bottom:14px}
+.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+.ch h3{font-size:16px}
 .chart{width:100%;display:block}
 .chart line{stroke:rgba(255,255,255,.08)}
-.chart text{fill:#8ea6b5;font-size:11px}
+.chart text{fill:#8ea6b5;font-size:10px}
 .chart .wd{font-weight:700;fill:#c4d6df}
 .chart .bv{fill:var(--ac);font-weight:700}
-.chart .nd{font-size:13px}
+.chart .nd{font-size:12px}
 .chart .bb{fill:url(#bg);transform-box:fill-box;transform-origin:bottom;animation:growY .8s both}
-.rw{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid var(--bd)}
+.rw{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--bd)}
 .rw:last-child{border:0}
-.rw b{display:block}
-.rw small{color:var(--mu);font-size:13px}
+.rw b{display:block;font-size:12.5px}
+.rw small{color:var(--mu);font-size:12px}
 .rv{color:var(--ac);font-weight:800;white-space:nowrap}
 .rv.er{color:var(--er)}
 .tools{display:flex;gap:10px;margin-bottom:12px;flex-wrap:wrap;align-items:center}
-.tools input{max-width:360px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px}
+.tools input{max-width:340px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:13px}
 .grid>*{animation:rise .4s both}
 .grid>:nth-child(2){animation-delay:.05s}.grid>:nth-child(3){animation-delay:.1s}.grid>:nth-child(4){animation-delay:.15s}.grid>:nth-child(n+5){animation-delay:.2s}
-.rc{content-visibility:auto;contain-intrinsic-size:auto 360px;display:flex;flex-direction:column;gap:6px}
-.rc h3{font-size:19px}
+.rc{content-visibility:auto;contain-intrinsic-size:auto 340px;display:flex;flex-direction:column;gap:6px}
+.rc h3{font-size:15px}
 .chips,.seg,.mul{display:flex;gap:8px;flex-wrap:wrap}
-.chips{margin-bottom:16px}
-.chip,.seg button,.mul button,.pl button{padding:8px 16px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid var(--bd);cursor:pointer;font-size:14px;transition:background .15s,border-color .15s,transform .15s}
+.chips{margin-bottom:14px}
+.chip,.seg button,.mul button,.pl button{padding:6px 13px;border-radius:99px;background:rgba(255,255,255,.06);border:1px solid var(--bd);cursor:pointer;font-size:12.5px;transition:background .15s,border-color .15s,transform .15s}
 .chip:hover,.seg button:hover,.mul button:hover,.pl button:hover{border-color:var(--ac);transform:translateY(-2px)}
 .chip.on,.seg button.on,.mul button.on,.pl button.on{background:linear-gradient(135deg,#ffd366,#f2a516);color:#2a1a00;border-color:transparent;font-weight:700}
 .pk .srch{margin:6px 0}
 .pl{max-height:190px;overflow:auto;display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .pl button[hidden]{display:none}
-.pnl{margin-bottom:18px;border-color:rgba(247,183,51,.5);animation:rise .25s both}
+.pnl{margin-bottom:16px;border-color:rgba(247,183,51,.5);animation:rise .25s both}
 .ph2{display:flex;justify-content:space-between;align-items:center;gap:10px}
-.acts{display:flex;gap:8px;margin-top:16px}
+.acts{display:flex;gap:8px;margin-top:14px}
 .stp{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .stp input{width:110px;text-align:center}
-.ph{height:96px;border-radius:13px;background:radial-gradient(circle at 30% 20%,hsl(var(--h) 55% 28%),hsl(var(--h) 55% 11%));color:hsl(var(--h) 80% 70%);display:grid;place-items:center;position:relative;overflow:hidden;margin-bottom:4px}
-.ph svg{width:54px;animation:bob 4s ease-in-out infinite}
+.ph{height:78px;border-radius:13px;background:radial-gradient(circle at 30% 20%,hsl(var(--h) 55% 28%),hsl(var(--h) 55% 11%));color:hsl(var(--h) 80% 70%);display:grid;place-items:center;position:relative;overflow:hidden;margin-bottom:4px}
+.ph svg{width:44px;animation:bob 4s ease-in-out infinite}
 .ph img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
-.ing{display:flex;justify-content:space-between;font-size:13px;padding:1px 0}
+.ing{display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0}
 .ing.bad,td.bad,.lowq{color:var(--er)}
 .tag{font-size:12px;padding:2px 9px;border-radius:99px;background:rgba(251,191,36,.15);color:var(--wr);align-self:flex-start}
-table{width:100%;border-collapse:collapse;font-size:14px}
-th,td{text-align:left;padding:11px 8px;border-bottom:1px solid var(--bd)}
-th{color:var(--mu);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--bd)}
+th{color:var(--mu);font-weight:700;font-size:10.5px;text-transform:uppercase;letter-spacing:.6px}
 tr:hover td{background:rgba(255,255,255,.03)}
 tr[hidden]{display:none}
 .row{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}
-.warn{background:rgba(251,113,133,.12);color:var(--er);padding:8px 12px;border-radius:10px;margin:10px 0;font-size:14px}
-.note,.banner{background:rgba(247,183,51,.09);border:1px solid rgba(247,183,51,.3);color:var(--ac);padding:11px 15px;border-radius:13px;margin-bottom:14px;font-size:14px}
+.warn{background:rgba(251,113,133,.12);color:var(--er);padding:8px 12px;border-radius:10px;margin:10px 0;font-size:12.5px}
+.note,.banner{background:rgba(247,183,51,.09);border:1px solid rgba(247,183,51,.3);color:var(--ac);padding:10px 14px;border-radius:13px;margin-bottom:14px;font-size:12.5px}
 .bar{display:block;height:8px;background:rgba(0,0,0,.35);border-radius:9px;overflow:hidden;margin:8px 0}
 .bar i{display:block;height:100%;background:linear-gradient(90deg,var(--tl),var(--ac));border-radius:9px;animation:grow 1s both;transform-origin:left}
-.list div{padding:8px 0;border-bottom:1px solid var(--bd);font-size:14px}
+.list div{padding:8px 0;border-bottom:1px solid var(--bd);font-size:12.5px}
 .sk{height:14px;border-radius:8px;background:rgba(255,255,255,.07);margin:10px 0}
 #toast{position:fixed;right:16px;bottom:16px;z-index:99;display:flex;flex-direction:column;gap:8px}
-.t{padding:11px 18px;border-radius:13px;background:#0d2133;border:1px solid var(--bd);animation:rise .25s both}
+.t{padding:10px 16px;border-radius:13px;background:#0d2133;border:1px solid var(--bd);animation:rise .25s both}
 .t.ok{border-color:var(--ok)}.t.ok::before{content:"✓ ";color:var(--ok)}
 .t.er{border-color:var(--er)}.t.er::before{content:"✕ ";color:var(--er)}
 .cel{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:90;background:#112a3a;border:1px solid var(--ac);padding:10px 22px;border-radius:99px;display:flex;gap:10px;align-items:center;animation:pop .35s both}
 .cel svg{width:26px;color:var(--ac)}
 .shake{animation:shake .4s}
-.dc{position:absolute;color:var(--tl);will-change:transform;animation:float var(--d) ease-in-out infinite;animation-delay:var(--l)}
+.dc{position:absolute;color:var(--tl);will-change:transform;filter:drop-shadow(0 0 8px rgba(47,217,187,.35));animation:float var(--d) ease-in-out infinite;animation-delay:var(--l)}
 .dc svg{width:100%;height:100%;display:block}
 .st{position:absolute;font-size:var(--s);color:var(--ac);opacity:.15;font-style:normal;animation:tw var(--d) ease-in-out infinite;animation-delay:var(--l)}
 .st::before{content:"✦"}
@@ -161,38 +165,42 @@ tr[hidden]{display:none}
 
 .sc b{font-family:"Onest",sans-serif;letter-spacing:-.5px;font-variant-numeric:tabular-nums}
 .sc b.er,.er{color:var(--er)}.sc b.gd{color:var(--ac)}.sc b.ok{color:var(--ok)}
-.bdg{display:inline-block;padding:3px 11px;border-radius:99px;font-size:12px;font-weight:700;background:rgba(255,255,255,.08);color:#c4d6df;white-space:nowrap}
+.rw b.ok{color:var(--ok)}
+.bdg{display:inline-block;padding:3px 11px;border-radius:99px;font-size:11px;font-weight:700;background:rgba(255,255,255,.08);color:#c4d6df;white-space:nowrap}
 .bdg.ok{background:rgba(74,222,128,.14);color:var(--ok)}.bdg.wr{background:rgba(251,191,36,.14);color:var(--wr)}.bdg.er{background:rgba(251,113,133,.14);color:var(--er)}.bdg.tl{background:rgba(47,217,187,.14);color:var(--tl)}.bdg.gd{background:rgba(247,183,51,.16);color:var(--ac)}.bdg.mu{color:var(--mu)}
 .gd{color:var(--ac)}
 .ra{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
 td .ra{margin:0}
-code{background:rgba(0,0,0,.35);padding:2px 8px;border-radius:7px;font-size:13px;color:var(--tl)}
+code{background:rgba(0,0,0,.35);padding:2px 8px;border-radius:7px;font-size:12px;color:var(--tl)}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);margin-left:8px}
-.sw{display:flex;align-items:center;gap:12px;cursor:pointer;margin:10px 0;color:var(--tx);font-size:15px}
+.sw{display:flex;align-items:center;gap:12px;cursor:pointer;margin:10px 0;color:var(--tx);font-size:13px}
 .sw input{display:none}
-.sw i{width:44px;height:24px;border-radius:99px;background:rgba(255,255,255,.12);position:relative;transition:background .2s;flex-shrink:0}
-.sw i::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .2s}
-.sw input:checked+i{background:var(--ac)}.sw input:checked+i::after{transform:translateX(20px);background:#2a1a00}
+.sw i{width:40px;height:22px;border-radius:99px;background:rgba(255,255,255,.12);position:relative;transition:background .2s;flex-shrink:0}
+.sw i::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+.sw input:checked+i{background:var(--ac)}.sw input:checked+i::after{transform:translateX(18px);background:#2a1a00}
 input[type=range]{padding:0;accent-color:var(--ac)}
-.hero2{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:6px 0 22px;flex-wrap:wrap}
-.wel{font-size:38px;line-height:1.15;color:var(--ac);text-shadow:0 0 26px rgba(247,183,51,.25)}
+.hero2{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:4px 0 18px;flex-wrap:wrap}
+.wel{font-size:28px;line-height:1.15;color:var(--ac);text-shadow:0 0 26px rgba(247,183,51,.25);text-align:left}
 .wv{display:inline-block;animation:wave 2.4s ease-in-out infinite;transform-origin:70% 70%}
 .hart{display:flex;gap:14px;color:var(--tl);opacity:.7}
-.hart svg{width:54px;animation:bob 4s ease-in-out infinite}.hart svg:nth-child(2){animation-delay:-1.3s;color:var(--ac)}.hart svg:nth-child(3){animation-delay:-2.6s}
-.pod{display:flex;align-items:flex-end;justify-content:center;gap:12px;height:230px}
+.hart svg{width:44px;animation:bob 4s ease-in-out infinite}.hart svg:nth-child(2){animation-delay:-1.3s;color:var(--ac)}.hart svg:nth-child(3){animation-delay:-2.6s}
+.pod{display:flex;align-items:flex-end;justify-content:center;gap:12px;height:200px}
 .pp{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;text-align:center;width:30%;animation:rise .6s both}
 .pp i{display:block;width:100%;border-radius:12px 12px 0 0;background:linear-gradient(180deg,rgba(247,183,51,.45),rgba(247,183,51,.06));margin-top:8px;transform-origin:bottom;animation:growY .8s both}
-.pp span{font-size:30px}.pp b{font-size:14px}.pp small{color:var(--mu)}
+.pp span{font-size:26px}.pp b{font-size:13px}.pp small{color:var(--mu)}
 .hbr{display:grid;grid-template-columns:minmax(90px,1.2fr) 2fr auto;gap:10px;align-items:center;padding:7px 0}
 .hbr .bar{margin:0}
-.pf{display:flex;gap:24px;align-items:center;margin-bottom:18px;flex-wrap:wrap}
-.av.lg{width:92px;height:92px;font-size:32px}
-.empty{text-align:center;color:var(--mu);padding:36px}
+.pf{display:flex;gap:24px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.av.lg{width:80px;height:80px;font-size:28px}
+.empty{text-align:center;color:var(--mu);padding:30px}
+.orow{display:grid;grid-template-columns:1fr 80px 100px auto;gap:8px;margin-bottom:8px;align-items:center}
+.pr{text-align:right}
 
 @keyframes rise{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 @keyframes pop{0%{opacity:0;transform:translateX(-50%) scale(.85)}to{opacity:1;transform:translateX(-50%)}}
 @keyframes rot{to{transform:rotate(360deg)}}
 @keyframes bob{50%{transform:translateY(-6px) rotate(2deg)}}
+@keyframes sway{0%,100%{transform:translateY(0) rotate(-1.5deg)}50%{transform:translateY(-9px) rotate(2deg)}}
 @keyframes bub{0%{transform:translateY(0) scale(.6);opacity:0}30%{opacity:.9}100%{transform:translateY(-34px) scale(1);opacity:0}}
 @keyframes drift{50%{transform:translate3d(50px,-34px,0) scale(1.08)}}
 @keyframes float{0%,100%{transform:translate3d(0,0,0) rotate(var(--r0))}33%{transform:translate3d(18px,-26px,0) rotate(calc(var(--r0) + 12deg))}66%{transform:translate3d(-14px,-12px,0) rotate(calc(var(--r0) - 8deg))}}
@@ -201,12 +209,10 @@ input[type=range]{padding:0;accent-color:var(--ac)}
 @keyframes grow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 @keyframes growY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 @keyframes shake{20%,60%{transform:translateX(-7px)}40%,80%{transform:translateX(7px)}}
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}#decor,.orb{display:none}}
 @keyframes wave{0%,60%,100%{transform:rotate(0)}10%,30%{transform:rotate(14deg)}20%,40%{transform:rotate(-8deg)}50%{transform:rotate(10deg)}}
 
 @media(max-width:1000px){.two{grid-template-columns:1fr}}
-@media(max-width:860px){#app{flex-direction:column}nav{width:100%;height:auto;position:static;flex-direction:row;align-items:center;overflow-x:auto;padding:8px;gap:4px}nav .brand,.ng{display:none}#nl{display:flex;gap:4px}nav a{white-space:nowrap;padding:8px 12px;font-size:14px}nav a.on::before{display:none}.usr{margin:0 0 0 auto;border:0;padding:0}.un{display:none}#hd{padding:0 16px;height:54px}main{padding:16px}.wel{font-size:26px}}
-
+@media(max-width:860px){#app{flex-direction:column}nav{width:100%;height:auto;position:static;flex-direction:row;align-items:center;overflow-x:auto;padding:8px;gap:4px}nav .brand,.ng{display:none}#nl{display:flex;gap:4px}nav a{white-space:nowrap;padding:7px 10px;font-size:13px}nav a.on::before{display:none}.usr{margin:0 0 0 auto;border:0;padding:0}.un{display:none}#hd{padding:0 16px;height:48px}main{padding:14px}.wel{font-size:22px}.orow{grid-template-columns:1fr 70px 80px auto}}
 </style>
 </head>
 <body>
@@ -230,32 +236,31 @@ input[type=range]{padding:0;accent-color:var(--ac)}
 <div id="toast"></div>
 <script>
 /* ===== CONFIG ===== */
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbxxePtYoxc2kiPmQVGuyEwphe-usUpRrUCbGAQ0a3RQ0JEtOy0EVDET5I26f0jkXgr9Sg/exec",POLL_MS:4000,CAPACITY:3500};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbxhxYfIQ3qQJgHx6inJWjRayOt3sZF4584wFXRM1b3x0ldl1BVMtLnWrJaOehK6c9Hciw/exec",POLL_MS:4000,CAPACITY:3500};
 
-/* ===== api.js: запити з повторами (той самий requestId → без дублів) та кешем ===== */
+/* ===== api: повтори (той самий requestId → без дублів) ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false,c:{},cur:{}};
 try{S.token=sessionStorage.getItem("tk")}catch(e){}
-const RD=/(list|get|history|users|sessions|recipes|maintList|settings|export|snapshot|boot|dashboard|me|ping|login)$/;
 async function api(action,data={}){
   if(!CONFIG.API_URL)throw new Error("Сервер не підключено (CONFIG.API_URL порожній)");
-  const body=JSON.stringify({action,token:S.token,requestId:crypto.randomUUID(),data});let j,err;
-  for(let i=0;i<3;i++){
-    try{const r=await fetch(CONFIG.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body});j=await r.json();err=null;break}
-    catch(e){err=e;await new Promise(r=>setTimeout(r,400*(i+1)))}
-  }
-  if(err)throw new Error("Немає зв'язку із сервером. Спробуйте ще раз.");
-  if(!j.ok){if(j.code==="SESSION_ENDED")return endSession(j.message);throw new Error(j.error||"Помилка сервера")}
-  return j.data;
+  S.busy=(S.busy||0)+1;
+  try{
+    const body=JSON.stringify({action,token:S.token,requestId:crypto.randomUUID(),data});let j,err;
+    for(let i=0;i<3;i++){
+      try{const r=await fetch(CONFIG.API_URL,{method:"POST",headers:{"Content-Type":"text/plain;charset=utf-8"},body});j=await r.json();err=null;break}
+      catch(e){err=e;await new Promise(r=>setTimeout(r,400*(i+1)))}
+    }
+    if(err)throw new Error("Немає зв'язку із сервером. Спробуйте ще раз.");
+    if(!j.ok){if(j.code==="SESSION_ENDED")return endSession(j.message);throw new Error(j.error||"Помилка сервера")}
+    return j.data;
+  }finally{S.busy--}
 }
 
-const _api=api;api=async function(a,d){S.busy=(S.busy||0)+1;try{return await _api(a,d)}finally{S.busy--}};
-
-/* ===== довідник рецептів (початкові дані з ТЗ; пізніше завантажуватимуться з Recipes) ===== */
+/* ===== довідник рецептів (початкові дані; далі підтягуються з сервера) ===== */
 const CATS=["Перев'язки","Тоніки та настої","Реанімаційні засоби","Настоянки","Мазі","Ветеринарія","Рецептурні препарати","Інгредієнти"];
 const ICON=["🩹","🍵","💉","🧪","🧴","🐾","💊","🌿"];
-const R=(c,n,sk,t,y,i)=>({id:"R"+(RECIPES.length+1),cat:c,name:n,skill:sk,time:t,yield:y,ing:i});
-const NA=(c,n)=>({id:"R"+(RECIPES.length+1),cat:c,name:n,na:true});
 const RECIPES=[];
+const R=(c,n,sk,t,y,i)=>({cat:c,name:n,skill:sk,time:t,yield:y,ing:i}),NA=(c,n)=>({cat:c,name:n,na:true});
 [
 R(0,"Бинт",1,15,5,{"Вовна":2,"Волокна":15}),
 R(0,"Стерильний бинт",1,20,5,{"Вовна":5,"Флакон спирту":5}),
@@ -286,17 +291,13 @@ R(7,"Концентрат макової рідини",3,80,3,{"Степовий
 R(7,"Екстракт листя коки",3,80,3,{"Листя коки":15,"Сірка":10,"Порожній флакон":3})
 ].forEach(r=>{r.id="R"+(RECIPES.length+1);RECIPES.push(r)});
 
-
 /* ===== утиліти ===== */
 const $=(s,e=document)=>e.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function toast(m,t="ok"){const d=document.createElement("div");d.className="t "+t;d.textContent=m;$("#toast").append(d);setTimeout(()=>d.remove(),4000)}
+let toast=function(m,t="ok"){const d=document.createElement("div");d.className="t "+t;d.textContent=m;$("#toast").append(d);setTimeout(()=>d.remove(),4000);sfx(t==="er"?"er":"ok")};
 const stock=n=>S.inv[n]??0;
 const fmtT=s=>s>=60?Math.floor(s/60)+" хв "+(s%60?s%60+" с":""):s+" с";
 const noSrv=()=>!CONFIG.API_URL&&`<div class="note">Сервер не підключено. Залишки, ціни та статистика з'являться після підключення Google Apps Script (CONFIG.API_URL). Дані не вигадуються.</div>`;
-
-
-/* спільні UI-хелпери */
 const isAdmin=()=>S.user?.role==="admin"||S.preview;
 const SK='<div class="ld"><svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M26 8h12M28 8v18L11 54a4 4 0 0 0 4 6h34a4 4 0 0 0 4-6L36 26V8"/><path d="M17 42h30"/></svg><i></i><i></i><i></i></div>';
 const money=n=>"$"+(+n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
@@ -308,7 +309,7 @@ const tbl=(c,r)=>r?.length?`<div style="overflow-x:auto"><table><tr>${c.map(x=>`
 const ra=(id,l)=>`<div class="ra">${l.map(([a,t])=>`<button class="btn ghost" data-a="${a}" data-id="${esc(id)}">${t}</button>`).join("")}</div>`;
 async function loadRef(){
   if(!CONFIG.API_URL||S.preview)return;
-  try{const d=await api("boot");S.inv=d.inv||{};S.prices=d.prices||{};S.total=d.total;S.dash=d.dash;CONFIG.CAPACITY=d.capacity||CONFIG.CAPACITY;
+  try{const d=await api("boot");if(!d)return;S.inv=d.inv||{};S.prices=d.prices||{};S.total=d.total;S.dash=d.dash;CONFIG.CAPACITY=d.capacity||CONFIG.CAPACITY;
     if(d.recipes?.length){RECIPES.length=0;RECIPES.push(...d.recipes)}}catch(e){toast(e.message,"er")}
 }
 const ready=()=>S.bp||Promise.resolve();
@@ -351,7 +352,14 @@ async function prefetch(){if(!CONFIG.API_URL||S.preview)return;const L=[["produc
   for(const[a,d]of L){await new Promise(r=>setTimeout(r,700));try{S.c[a+JSON.stringify(d)]=await api(a,d)}catch(e){}}}
 function cu(root=document){root.querySelectorAll(".cu").forEach(e=>{const n=+e.dataset.n;if(!(n>0))return;const t0=performance.now();(function f(t){const p=Math.min(1,(t-t0)/700);e.textContent=Math.round(n*(1-Math.pow(1-p,3)));if(p<1)requestAnimationFrame(f)})(t0)})}
 
-/* ілюстрації, плаваючі декорації, світлові частинки (легкі: transform + спрайти) */
+/* ===== ціни (Крафт, Підрахунок, Замовлення, сторінка «Ціни») ===== */
+const allNames=()=>[...new Set([...Object.keys(S.inv),...RECIPES.flatMap(r=>[r.name,...Object.keys(r.ing||{})])])].sort((a,b)=>a.localeCompare(b,"uk"));
+async function setPrice(item,val){const p=Number(val);if(val===""||!(p>=0)){toast("Введіть коректну ціну (0 або більше)","er");return false}
+  if(CONFIG.API_URL&&!S.preview){try{await api("prices.set",{item,price:p,note:"Ручне введення"})}catch(e){toast(e.message,"er");return false}}
+  S.prices[item]=p;return true}
+const pin=(n,v,w)=>`<input class="pr" type="number" min="0" step="0.01" data-n="${esc(n)}" value="${v??""}" placeholder="$" style="width:${w||92}px;padding:5px 8px">`;
+
+/* ілюстрації, плаваючі декорації, світлові частинки */
 const ART={
 bandage:'<rect x="5" y="22" width="54" height="20" rx="10"/><path d="M26 22v20M38 22v20M14 32h.1M50 32h.1"/>',
 flask:'<path d="M26 8h12M28 8v18L11 54a4 4 0 0 0 4 6h34a4 4 0 0 0 4-6L36 26V8"/><path d="M17 42h30M26 50h.1M36 47h.1"/>',
@@ -364,7 +372,6 @@ leaf:'<path d="M10 54C10 28 28 10 54 10c0 26-18 44-44 44z"/><path d="M10 54L38 2
 };
 const CAT_ART=["bandage","flask","cross","drop","mortar","sprig","pill","leaf"],HUE=[172,200,350,140,32,95,280,125];
 const svg=n=>`<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ART[n]}</svg>`;
-/* інтер'єр аптеки: полиці з пляшечками (векторна ілюстрація) */
 const SCENE=`<svg viewBox="0 0 400 230" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 80h384M8 155h384M8 230h384" stroke-width="3"/>
 <g fill="currentColor" fill-opacity=".14"><rect x="26" y="38" width="24" height="42" rx="6"/><path d="M70 80V52l-10-10h34L84 52v28z"/><rect x="118" y="30" width="30" height="50" rx="8"/><path d="M178 80c0-16 8-22 8-34h14c0 12 8 18 8 34z"/><rect x="236" y="44" width="26" height="36" rx="5"/><path d="M290 80V46l-9-12h30l-9 12v34z"/><rect x="340" y="36" width="34" height="44" rx="9"/>
 <path d="M30 155v-34a8 8 0 0 1 16 0v34z"/><rect x="72" y="112" width="40" height="43" rx="8"/><path d="M140 155c-12-6-14-26-4-38h30c10 12 8 32-4 38z"/><rect x="198" y="120" width="22" height="35" rx="5"/><path d="M240 155v-30l12-14 12 14v30z"/><rect x="292" y="108" width="30" height="47" rx="8"/><path d="M340 155c0-18 4-26 4-38h20c0 12 4 20 4 38z"/>
@@ -372,13 +379,13 @@ const SCENE=`<svg viewBox="0 0 400 230" fill="none" stroke="currentColor" stroke
 const ph=r=>`<div class="ph" style="--h:${HUE[r.cat]}">${svg(CAT_ART[r.cat])}</div>`;
 function celebrate(name){const c=document.createElement("div");c.className="cel";c.innerHTML=svg("flask")+`<b>Готово: ${esc(name)}</b>`;document.body.append(c);setTimeout(()=>c.remove(),2400)}
 (function(){
-  const R=document.documentElement,reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  const R=document.documentElement;
   let pref=null;try{pref=localStorage.getItem("fx")}catch(e){}
-  if(pref==="lite"||reduce)R.classList.add("lite");
+  if(pref==="lite")R.classList.add("lite");
   ["o1","o2"].forEach(c=>{const o=document.createElement("div");o.className="orb "+c;document.body.prepend(o)});
   const d=document.createElement("div");d.id="decor";const k=Object.keys(ART);
   for(let i=0;i<14;i++){const e=document.createElement("div"),sz=30+Math.random()*60;
-    e.className="dc";e.style.cssText=`left:${(i*19+Math.random()*10)%95}%;top:${(i*23+Math.random()*12)%90}%;width:${sz}px;height:${sz}px;opacity:${.08+Math.random()*.13};--d:${11+Math.random()*10}s;--l:-${Math.random()*14}s;--r0:${Math.random()*60-30}deg`;
+    e.className="dc";e.style.cssText=`left:${(i*19+Math.random()*10)%95}%;top:${(i*23+Math.random()*12)%90}%;width:${sz}px;height:${sz}px;opacity:${.12+Math.random()*.16};--d:${11+Math.random()*10}s;--l:-${Math.random()*14}s;--r0:${Math.random()*60-30}deg`;
     e.innerHTML=svg(k[i%k.length]);d.append(e)}
   for(let i=0;i<22;i++){const s=document.createElement("i");s.className="st";s.style.cssText=`left:${Math.random()*98}%;top:${Math.random()*96}%;--s:${8+Math.random()*12}px;--d:${3+Math.random()*4}s;--l:-${Math.random()*6}s`;d.append(s)}
   for(let i=0;i<26;i++){const p=document.createElement("i");p.className="pt";p.style.cssText=`left:${Math.random()*100}%;--s:${3+Math.random()*8}px;--o:${.25+Math.random()*.5};--d:${12+Math.random()*16}s;--l:-${Math.random()*24}s;--dx:${Math.random()*90-45}px`;d.append(p)}
@@ -387,11 +394,10 @@ function celebrate(name){const c=document.createElement("div");c.className="cel"
   const sc=document.getElementById("scn");if(sc)sc.innerHTML=SCENE;
   const nb=document.querySelector("nav .brand");if(nb)nb.innerHTML=svg("cross")+"Аптека Аннесбурга";
   document.addEventListener("visibilitychange",()=>R.classList.toggle("pz",document.hidden));
-  if(!pref&&!reduce)setTimeout(()=>{let n=0,t0=0;const f=t=>{if(!t0)t0=t;n++;if(t-t0<1500)requestAnimationFrame(f);else if(n/((t-t0)/1000)<40)R.classList.add("lite")};requestAnimationFrame(f)},1200);
 })();
 
-const PAGES=[["home","🏠","Головна","РОБОТА"],["craft","⚗️","Крафт"],["goods","🛒","Товари"],["buy","🪙","Скупка"],["stock","📦","Склад аптеки"],["calc","🧮","Підрахунок"],["orders","📑","Оптові замовлення","СПІЛЬНЕ"],["log","📜","Журнал операцій"],["profile","👤","Профіль","АКАУНТ"],["alerts","🔔","Система оповіщення","АДМІНІСТРАТОР"],["admin","🛡️","Адмін-панель"]];
-const NP={craft:"craft",goods:"goods",buy:"buy",stock:"stock",orders:"orders"};
+const PAGES=[["home","🏠","Головна","РОБОТА"],["craft","⚗️","Крафт"],["goods","🛒","Товари"],["buy","🪙","Скупка"],["stock","📦","Склад аптеки"],["calc","🧮","Підрахунок"],["prices","💲","Ціни"],["orders","📑","Оптові замовлення","СПІЛЬНЕ"],["log","📜","Журнал операцій"],["profile","👤","Профіль","АКАУНТ"],["alerts","🔔","Система оповіщення","АДМІНІСТРАТОР"],["admin","🛡️","Адмін-панель"]];
+const NP={craft:"craft",goods:"goods",buy:"buy",stock:"stock",orders:"orders",prices:"prices"};
 const VIEWS={};
 function buildNav(){
   const n=$("#nl");n.innerHTML="";const pm=(S.user?.perms||"").split(",");
@@ -412,7 +418,7 @@ function go(id){
 }
 function stub(v){v.innerHTML=`<div class="card">Розділ недоступний.</div>`}
 
-/* власна генеративна ембієнт-музика (Web Audio): без аудіофайлів, без авторських прав */
+/* генеративна ембієнт-музика (Web Audio) */
 const AU={on:false,vol:.3,sfx:true};
 try{Object.assign(AU,JSON.parse(localStorage.getItem("au")||"{}"))}catch(e){}
 let actx=null,mus=null;
@@ -431,7 +437,6 @@ function sfx(t){if(!AU.sfx)return;try{actx=actx||new AudioContext();const o=actx
 function syncBtn(){const b=document.getElementById("mt");if(b)b.textContent=AU.on?"🎵":"🔇"}
 (function(){const b=document.createElement("button");b.id="mt";b.title="Музика";b.onclick=()=>{AU.on=!AU.on;auSave();music()};document.body.append(b);syncBtn();
   document.addEventListener("click",()=>{if(AU.on&&!mus)music()},{once:true})})();
-const _toast=toast;toast=(m,t)=>{_toast(m,t);sfx(t==="er"?"er":"ok")};
 
 VIEWS.home=async v=>{
   const t=S.cur;v.onclick=null;
@@ -447,7 +452,7 @@ VIEWS.home=async v=>{
     if(!sum)s+=`<text class="nd" x="${W/2}" y="${(B+T)/2}" text-anchor="middle">Даних за цей тиждень немає</text>`;return s+"</svg>"};
   const rw=(a,e)=>a?.length?a.map(x=>`<div class="rw"><div><b>${esc(x.name)}</b><small>${esc(x.meta||"")}</small></div><span class="rv">${esc(x.v)}</span></div>`).join(""):`<p class="meta" style="padding:10px 0">${e}</p>`;
   const draw=d=>{
-    const m=d.mine||{},wk=d.week?.length?d.week:WD.map(()=>({n:0,d:""})),top=d.top||[],pop=d.popular||[],mx=Math.max(1,...pop.map(x=>x.n)),hs=[0,86,64];
+    const m=d.mine||{},wk=d.week?.length?d.week:WD.map(()=>({n:0,d:""})),top=d.top||[],pop=d.popular||[],mx=Math.max(1,...pop.map(x=>x.n));
     $("#hb").innerHTML=`<div class="scs">${sc("Мої крафти за тиждень","⚗️",m.crafts??"—","виконаних операцій")}${sc("Випущено мною","💊",m.units??"—","одиниць за тиждень")}${sc("Рівень уміння","⭐",m.skill??"—","твій поточний рівень")}${sc("Місце в рейтингу","🏆",m.rank?"#"+m.rank:"—","серед крафтерів тижня")}</div>
     <div class="two"><div class="card"><div class="ch"><h3>Активність команди</h3><span class="bdg tl">цей тиждень</span></div>${chart(wk)}</div>
     <div class="card"><div class="ch"><h3>Останні крафти</h3></div>${rw(d.crafts,"Крафтів поки немає")}</div></div>
@@ -455,7 +460,7 @@ VIEWS.home=async v=>{
     <div class="card"><div class="ch"><h3>Популярні рецепти</h3></div>${pop.length?pop.map(x=>`<div class="hbr"><span>${esc(x.name)}</span><div class="bar"><i style="width:${Math.round(x.n/mx*100)}%"></i></div><b class="gd">${x.n}</b></div>`).join(""):'<p class="meta" style="padding:10px 0">Поки немає даних</p>'}</div></div>`;
     cu($("#hb"))};
   await ready();if(t!==S.cur)return;draw(S.dash||{});
-  if(CONFIG.API_URL&&!S.preview)try{const d=await api("dashboard");if(t!==S.cur)return;S.dash=d;draw(d)}catch(e){toast(e.message,"er")}
+  if(CONFIG.API_URL&&!S.preview)try{const d=await api("dashboard");if(t!==S.cur||!d)return;S.dash=d;draw(d)}catch(e){toast(e.message,"er")}
 };
 
 let craftCat=0,craftQ="",craftOnly=false;
@@ -489,8 +494,15 @@ function craftPanel(r){
     ins.forEach(([n,q,s])=>{if(s<q)w.push(`Не вистачає: ${n} (${q-s})`)});
     if(fin>CONFIG.CAPACITY)w.push("Перевищено місткість складу "+CONFIG.CAPACITY);
     if(!CONFIG.API_URL)w.push("Сервер не підключено");
-    $("#sm").innerHTML=`<p class="meta">Час: ${fmtT(r.time*c)} · Продукції на склад: <b>${out}</b></p><table><tr><th>Інгредієнт</th><th>Списати</th><th>Є</th><th>Залишиться</th></tr>${ins.map(([n,q,s])=>`<tr><td>${esc(n)}</td><td>${q}</td><td class="${s<q?"bad":""}">${s}</td><td>${s-q}</td></tr>`).join("")}</table><p class="meta">Склад після операції: ${fin} / ${CONFIG.CAPACITY}</p>${w.map(x=>`<div class="warn">${esc(x)}</div>`).join("")}`;
+    let cost=0,unk=0;ins.forEach(([n,q])=>{const p=S.prices[n];if(p==null)unk++;else cost+=p*q});
+    const pp=S.prices[r.name],rev=pp==null?null:pp*out,pf=rev==null?null:rev-cost;
+    $("#sm").innerHTML=`<p class="meta">Час: ${fmtT(r.time*c)} · Продукції на склад: <b>${out}</b></p><div style="overflow-x:auto"><table><tr><th>Інгредієнт</th><th>Списати</th><th>Є</th><th>Залишиться</th><th>Ціна/од. $</th><th>Вартість</th></tr>${ins.map(([n,q,s])=>`<tr><td>${esc(n)}</td><td>${q}</td><td class="${s<q?"bad":""}">${s}</td><td>${s-q}</td><td>${pin(n,S.prices[n],80)}</td><td>${S.prices[n]==null?"—":money(S.prices[n]*q)}</td></tr>`).join("")}</table></div><p class="meta">Склад після операції: ${fin} / ${CONFIG.CAPACITY}</p>
+    <div class="rw"><span>Витрати на матеріали${unk?` <small>(без ${unk} поз. — ціну не вказано)</small>`:""}</span><b class="er">${money(cost)}</b></div>
+    <div class="rw"><span>Ціна продажу «${esc(r.name)}» за од.</span>${pin(r.name,pp)}</div>
+    <div class="rw"><span>Очікувана виручка (${out} од.)</span><b class="gd">${rev==null?"—":money(rev)}</b></div>
+    <div class="rw"><span>Очікуваний прибуток</span><b class="${pf==null?"":pf>=0?"ok":"er"}">${pf==null?"—":money(pf)}</b></div>${w.map(x=>`<div class="warn">${esc(x)}</div>`).join("")}`;
     $("#ok").disabled=w.length>0;return{c,used,out}};
+  m.onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){calc();toast("Ціну збережено")}};
   $("#cy").oninput=calc;calc();
   $("#ok").onclick=async()=>{const{c,used,out}=calc(),b=$("#ok");b.disabled=true;b.innerHTML='<span class="spin"></span>Виконується';
     try{await api("craft",{recipeId:r.id,cycles:c});
@@ -538,7 +550,7 @@ VIEWS.buy=v=>{
   <div class="ch"><h3>Що ми скуповуємо</h3></div>${d.offers.length?`<div class="grid">${d.offers.map(card).join("")}</div>`:'<div class="card empty">Скупка порожня. Натисни «Виставити на скупку».</div>'}
   <div class="ch" style="margin-top:24px"><h3>Історія закупівель</h3></div><div class="card">${tbl([["time","Час"],["item","Предмет",o=>`<b>${esc(o.item)}</b>`],["qty","К-сть"],["price","Ціна",o=>money(o.price)],["total","Разом",o=>`<b class="er">${money(o.total)}</b>`],["seller","Продавець"],["user","Прийняв"]],d.history)}</div>`},`<button class="btn" id="b1">+ Виставити на скупку</button>`,true);
   const F=o=>[{k:"price",l:"Ціна скупки за одиницю ($)",t:"number",v:o?.price},{k:"target",l:"Скільки потрібно всього (0 — без ліміту)",t:"number",v:o?.target??0},{k:"note",l:"Примітка",v:o?.note}];
-  $("#b1").onclick=()=>form("Виставити на скупку",[{k:"item",l:"Предмет",o:Object.keys(S.inv).sort()},...F()],async x=>{await api("buy.save",x);S.bp=loadRef();go("buy")});
+  $("#b1").onclick=()=>form("Виставити на скупку",[{k:"item",l:"Предмет",o:allNames()},...F()],async x=>{await api("buy.save",x);S.bp=loadRef();go("buy")});
   v.onclick=async e=>{const b=e.target.closest("[data-a]");if(!b||!D)return;const{a,id}=b.dataset,o=D.offers.find(x=>x.id===id);if(!o)return;
     if(a==="recv")return form("Скуплено: "+o.item,[{k:"qty",l:"Кількість",t:"number",v:o.target>0?Math.max(1,o.target-o.bought):1},{k:"price",l:"Ціна за одиницю ($)",t:"number",v:o.price},{k:"seller",l:"Продавець (необов'язково)"}],async x=>{await api("buy.receive",{offerId:id,...x});S.bp=loadRef();toast("Предмети додано на склад");go("buy")});
     if(a==="edit")return form("Змінити скупку: "+o.item,F(o),async x=>{await api("buy.edit",{id,...x});go("buy")});
@@ -546,45 +558,77 @@ VIEWS.buy=v=>{
     if(await act("buy.status",{id,op:a}))go("buy")};
 };
 
+/* ===== Оптові замовлення: форма з вибором предметів ===== */
+function orderForm(){
+  const opts=allNames().map(n=>`<option>${esc(n)}</option>`).join("");
+  const row=()=>`<div class="orow"><select class="oi">${opts}</select><input class="oq" type="number" min="1" value="1"><input class="opx" type="number" min="0" step="0.01" placeholder="Ціна $"><button type="button" class="btn ghost orm">✕</button></div>`;
+  const m=pnl(`<div class="ph2"><h3>Нове замовлення</h3><button class="btn ghost x">✕</button></div><label>Назва</label><input id="ot"><label>Замовник / постачальник</label><input id="opn"><label>Планова дата</label><input id="od" type="date"><label>Позиції (предмет · кількість · ціна за од.)</label><div id="orows">${row()}</div><button type="button" class="btn ghost" id="oadd" style="margin-top:6px">+ Додати позицію</button><p class="meta" id="otot" style="margin-top:8px"></p><label>Коментар</label><textarea id="oc" rows="2"></textarea><div class="err" id="fe"></div><div class="acts"><button class="btn" id="fs">Зберегти</button><button class="btn ghost x">Скасувати</button></div>`);
+  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
+  const rows=()=>[...m.querySelectorAll(".orow")];
+  const tot=()=>{const s=rows().reduce((a,r)=>a+(+r.querySelector(".oq").value||0)*(+r.querySelector(".opx").value||0),0);$("#otot",m).textContent="Сума замовлення: "+money(s)};
+  const fill=r=>{const p=S.prices[r.querySelector(".oi").value];if(p!=null&&!r.querySelector(".opx").value)r.querySelector(".opx").value=p};
+  $("#oadd",m).onclick=()=>{$("#orows",m).insertAdjacentHTML("beforeend",row());fill(rows().pop());tot()};
+  m.addEventListener("change",e=>{if(e.target.classList.contains("oi")){const r=e.target.closest(".orow");r.querySelector(".opx").value="";fill(r)}tot()});
+  m.addEventListener("input",e=>{if(e.target.matches(".oq,.opx"))tot()});
+  m.addEventListener("click",e=>{const b=e.target.closest(".orm");if(b&&rows().length>1){b.closest(".orow").remove();tot()}});
+  fill(rows()[0]);tot();
+  const sb=$("#fs",m);
+  sb.onclick=async()=>{
+    const items=rows().map(r=>({name:r.querySelector(".oi").value,qty:+r.querySelector(".oq").value,price:r.querySelector(".opx").value===""?null:+r.querySelector(".opx").value}));
+    if(!$("#ot",m).value.trim()){$("#fe",m).textContent="Вкажіть назву";return}
+    if(items.some(i=>!(i.qty>0))){$("#fe",m).textContent="Кількість має бути більшою за 0";return}
+    sb.disabled=true;
+    try{await api("orders.save",{title:$("#ot",m).value,party:$("#opn",m).value,due:$("#od",m).value,items,comment:$("#oc",m).value});m.remove();toast("Замовлення створено");go("orders")}
+    catch(e){$("#fe",m).textContent=e.message;sb.disabled=false}};
+}
 VIEWS.orders=v=>{
-  page(v,"Оптові замовлення","orders.list",{},d=>tbl([["title","Назва"],["party","Замовник"],["total","Сума"],["due","Дата"],["status","Статус",o=>sbg(o.status)],["progress","Прогрес"],["a","",o=>ra(o.id,[["info","Деталі"],["fulfil","Виконати"],["cancel","Скасувати"]])]],d),`<button class="btn" id="b1">Нове замовлення</button>`);
-  $("#b1").onclick=()=>form("Нове замовлення",[{k:"title",l:"Назва"},{k:"party",l:"Замовник / постачальник"},{k:"due",l:"Планова дата",t:"date"},{k:"items",l:"Позиції (рядок: Назва;кількість;ціна)",t:"area"},{k:"comment",l:"Коментар"}],async x=>{
-    x.items=x.items.split("\n").map(s=>s.trim()).filter(Boolean).map(s=>{const[n,q,p]=s.split(";");return{name:n.trim(),qty:+q,price:p===undefined||p===""?null:+p}});
-    if(!x.items.length||x.items.some(i=>!i.name||!(i.qty>0)))throw new Error("Перевірте позиції");
-    await api("orders.save",x);go("orders")});
+  page(v,"Оптові замовлення","orders.list",{},d=>tbl([["title","Назва"],["party","Замовник"],["total","Сума",o=>money(o.total)],["due","Дата"],["status","Статус",o=>sbg(o.status)],["progress","Прогрес"],["a","",o=>ra(o.id,[["info","Деталі"],["fulfil","Виконати"],["cancel","Скасувати"]])]],d),`<button class="btn" id="b1">Нове замовлення</button>`);
+  $("#b1").onclick=orderForm;
   v.onclick=async e=>{const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
-    if(a==="info"){try{const o=await api("orders.get",{id});modal(`<h2>${esc(o.title)}</h2><p class="meta">${esc(o.status)} · прогрес ${esc(o.progress)}</p>${tbl([["name","Предмет"],["qty","Потрібно"],["stock","На складі"],["missing","Бракує"],["price","Ціна"]],o.items)}<h3 style="margin-top:12px">Історія</h3>${tbl([["time","Час"],["user","Хто"],["text","Зміна"]],o.history)}<button class="btn ghost" style="margin-top:12px" onclick="this.closest('.pnl').remove()">Закрити</button>`)}catch(x){toast(x.message,"er")}return}
+    if(a==="info"){try{const o=await api("orders.get",{id});modal(`<h2>${esc(o.title)}</h2><p class="meta">${esc(o.status)}</p>${tbl([["name","Предмет"],["qty","Потрібно"],["stock","На складі"],["missing","Бракує"],["price","Ціна"]],o.items)}<h3 style="margin-top:12px">Історія</h3>${tbl([["time","Час"],["user","Хто"],["text","Зміна"]],o.history)}<button class="btn ghost" style="margin-top:12px" onclick="this.closest('.pnl').remove()">Закрити</button>`)}catch(x){toast(x.message,"er")}return}
     if(a==="fulfil")return sure("Підтвердити виконання та списання зі складу?",async()=>{if(await act("orders.fulfil",{id}))go("orders")});
-    if(await(a==="fulfil"?act("orders.fulfil",{id}):act("orders.status",{id,status:"Скасовано"})))go("orders")};
+    if(a==="cancel")return sure("Скасувати замовлення?",async()=>{if(await act("orders.status",{id,status:"Скасовано"}))go("orders")})};
 };
 
 VIEWS.calc=async v=>{
   const t=S.cur;v.onclick=null;let cat=0,rid=null;
-  v.innerHTML=`<div class="top"><h2>Підрахунок</h2><button class="btn ghost" id="kp">Оновити ціну</button></div>${noSrv()}<div class="card"><label>Категорія</label><div class="chips" id="kc"></div><label>Рецепт</label><div class="chips" id="kr"></div><label>Потрібна кількість готової продукції</label><div class="stp"><button class="btn ghost" data-d="-10">−10</button><input id="kq" type="number" min="1" value="100"><button class="btn ghost" data-d="10">+10</button><button class="btn ghost" data-d="100">+100</button></div></div><div id="ko" style="margin-top:14px"></div>`;
+  v.innerHTML=`<div class="top"><h2>Підрахунок</h2></div>${noSrv()}<div class="card"><label>Категорія</label><div class="chips" id="kc"></div><label>Рецепт</label><div class="chips" id="kr"></div><label>Потрібна кількість готової продукції</label><div class="stp"><button class="btn ghost" data-d="-10">−10</button><input id="kq" type="number" min="1" value="100"><button class="btn ghost" data-d="10">+10</button><button class="btn ghost" data-d="100">+100</button></div></div><div id="ko" style="margin-top:14px"></div>`;
   await ready();if(t!==S.cur)return;
   const run=()=>{
     const r=RECIPES.find(x=>x.id===rid),q=Math.max(1,parseInt($("#kq").value)||1);
     if(!r){$("#ko").innerHTML="";return}
-    const cy=Math.ceil(q/r.yield),out=cy*r.yield;let cost=0,unk=0;
-    const rows=Object.entries(r.ing).map(([n,per])=>{const need=per*cy,have=stock(n),def=Math.max(0,need-have),p=S.prices[n];let c="—";
-      if(def>0){if(p==null)unk++;else{c=def*p;cost+=c}}
-      return`<tr><td>${esc(n)}</td><td>${need}</td><td>${have}</td><td class="${def?"bad":""}">${def}</td><td>${p??"Ціну не вказано"}</td><td>${c}</td></tr>`}).join("");
-    $("#ko").innerHTML=`<div class="card"><h3>${esc(r.name)}</h3><p class="meta">Цільова кількість: ${q} · Циклів: <b>${cy}</b> · Фактичний вихід: <b>${out}</b> · Надлишок: ${out-q} · Час: ${fmtT(cy*r.time)}</p><div style="overflow-x:auto"><table><tr><th>Інгредієнт</th><th>Потрібно</th><th>На складі</th><th>Дефіцит</th><th>Ціна/од.</th><th>Вартість дефіциту</th></tr>${rows}</table></div><p style="margin-top:10px">Орієнтовна вартість закупівлі: <b>${cost}</b>${unk?` <span class="meta">(без ${unk} поз. — ціну не вказано)</span>`:""}</p></div>`};
+    const cy=Math.ceil(q/r.yield),out=cy*r.yield;let full=0,cost=0,unk=0;
+    const rows=Object.entries(r.ing).map(([n,per])=>{const need=per*cy,have=stock(n),def=Math.max(0,need-have),p=S.prices[n];
+      if(p==null)unk++;else{full+=need*p;cost+=def*p}
+      return`<tr><td>${esc(n)}</td><td>${need}</td><td>${have}</td><td class="${def?"bad":""}">${def}</td><td>${pin(n,p,80)}</td><td>${p==null?"—":money(need*p)}</td><td>${p==null?"—":money(def*p)}</td></tr>`}).join("");
+    const pp=S.prices[r.name],rev=pp==null?null:pp*out,pf=rev==null?null:rev-full;
+    $("#ko").innerHTML=`<div class="card"><h3>${esc(r.name)}</h3><p class="meta">Цільова кількість: ${q} · Циклів: <b>${cy}</b> · Фактичний вихід: <b>${out}</b> · Надлишок: ${out-q} · Час: ${fmtT(cy*r.time)}</p><div style="overflow-x:auto"><table><tr><th>Інгредієнт</th><th>Потрібно</th><th>На складі</th><th>Дефіцит</th><th>Ціна/од. $</th><th>Вартість усього</th><th>Докупити на</th></tr>${rows}</table></div>${unk?`<p class="meta" style="margin-top:8px">Ціну не вказано для ${unk} поз. — впиши її в таблиці вище.</p>`:""}
+    <div class="rw" style="margin-top:10px"><span>Ціна продажу «${esc(r.name)}» за од.</span>${pin(r.name,pp)}</div></div>
+    <div class="scs" style="margin-top:14px">${sc("Матеріали всього","🧾",money(full),"повна вартість сировини")}${sc("Докупити","🛒",money(cost),"лише те, чого бракує","er")}${sc("Виручка","💵",rev==null?"—":money(rev),out+" од. за вказаною ціною","gd")}${sc("Прибуток","📈",pf==null?"—":money(pf),"виручка − матеріали",pf==null?"":pf>=0?"ok":"er")}</div>`};
+  $("#ko").onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){run();toast("Ціну збережено")}};
   const drawR=()=>{const rs=RECIPES.filter(r=>r.cat===cat&&!r.na);if(!rs.find(r=>r.id===rid))rid=rs[0]?.id||null;
     $("#kr").innerHTML=rs.map(r=>`<span class="chip ${r.id===rid?"on":""}" data-r="${r.id}">${esc(r.name)}</span>`).join("")||'<span class="meta">Немає доступних рецептів</span>';run()};
   const drawC=()=>{$("#kc").innerHTML=CATS.map((c,i)=>`<span class="chip ${i===cat?"on":""}" data-i="${i}">${ICON[i]} ${c}</span>`).join("");drawR()};
   $("#kc").onclick=e=>{const i=e.target.closest("[data-i]")?.dataset.i;if(i!=null){cat=+i;drawC()}};
   $("#kr").onclick=e=>{const i=e.target.closest("[data-r]")?.dataset.r;if(i){rid=i;drawR()}};
   $("#kq").oninput=run;
-  $("#kp").onclick=()=>form("Ціна закупівлі (від інших гравців)",[{k:"item",l:"Предмет",o:[...new Set(RECIPES.flatMap(r=>Object.keys(r.ing||{})))].sort()},{k:"price",l:"Ціна за одиницю",t:"number"},{k:"note",l:"Джерело / примітка"}],async d=>{await api("prices.set",d);S.bp=loadRef();await S.bp;run()});
   drawC();
+};
+
+VIEWS.prices=async v=>{
+  const t=S.cur;v.onclick=null;
+  v.innerHTML=`<div class="top"><h2>Ціни</h2></div>${noSrv()}<div class="tools"><input id="pq" placeholder="🔍 Пошук предмета…"></div><div class="card" id="pb">${SK}</div>`;
+  await ready();if(t!==S.cur)return;
+  const val=()=>money(allNames().reduce((a,n)=>a+stock(n)*(S.prices[n]||0),0));
+  $("#pb").innerHTML=`<p class="meta" style="margin-bottom:8px">Вкажи ціну за одиницю ($). Вона використовується в Крафті, Підрахунку та Замовленнях. Зберігається, коли виходиш з поля. Вартість складу: <b class="gd" id="pv">${val()}</b></p><div style="overflow-x:auto"><table><tr><th>Предмет</th><th>На складі</th><th>Ціна за од., $</th><th>Вартість запасу</th></tr>${allNames().map(n=>`<tr><td>${esc(n)}</td><td>${stock(n)}</td><td>${pin(n,S.prices[n])}</td><td class="sv">${S.prices[n]==null?"—":money(stock(n)*S.prices[n])}</td></tr>`).join("")}</table></div>`;
+  $("#pq").oninput=e=>document.querySelectorAll("#pb tr:not(:first-child)").forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
+  $("#pb").onchange=async e=>{const i=e.target.closest(".pr");if(!i)return;if(await setPrice(i.dataset.n,i.value)){const n=i.dataset.n;i.closest("tr").querySelector(".sv").textContent=money(stock(n)*S.prices[n]);$("#pv").textContent=val();toast("Збережено")}};
 };
 
 VIEWS.alerts=v=>{
   if(!isAdmin()){v.innerHTML='<div class="warn">Доступно лише адміністратору</div>';return}
-  const CL={manual:"Ручний",min:"Мін. залишок",zero:"Відсутній"};
   page(v,"Система оповіщення","alerts.list",{},d=>tbl([["item","Предмет",o=>`<b>${esc(o.item)}</b>`],["condition","Умова"],["interval","Інтервал",o=>o.interval+" хв"],["prog","Надіслано",o=>`${o.sent} / ${o.repeats}`],["status","Статус",o=>sbg(o.status)],["lastError","Помилка"],["a","",o=>ra(o.id,[["restart","▶ Запустити"],["stop","■ Стоп"],["toggle","Вкл/Викл"],["del","Видалити"]])]],d),`<button class="btn" id="b1">+ Нове сповіщення</button><button class="btn ghost" id="b2">Тест Telegram</button>`);
-  const names=Object.keys(S.inv).sort();
+  const names=allNames();
   const res=r=>{if(r&&r.ok===false)toast("Telegram: "+(r.error||"помилка"),"er");else toast("Сповіщення запущено — перше повідомлення надіслано")};
   $("#b1").onclick=()=>form("Нове сповіщення",[names.length?{k:"item",l:"Предмет",o:names}:{k:"item",l:"Предмет"},{k:"condition",l:"Умова запуску",o:[["manual","Ручний"],["min","Мін. залишок"],["zero","Предмет відсутній"]]},{k:"now",l:"Запустити",o:[["1","Одразу після збереження"],["0","Пізніше / за умовою"]]},{k:"message",l:"Додатковий текст у повідомленні",t:"area"},{k:"interval",l:"Інтервал між повідомленнями, хв",t:"number",v:5},{k:"repeats",l:"Кількість повідомлень у серії",t:"number",v:5},{k:"chatId",l:"Telegram chat ID (порожньо — основна група)"},{k:"start",l:"Час початку (Київ), для ручного",t:"datetime-local"}],async x=>{const r=await api("alerts.save",x);if(x.now==="1")res(r);go("alerts")});
   $("#b2").onclick=async()=>{const b=$("#b2");b.disabled=true;try{await api("admin.tgTest");toast("Тестове повідомлення надіслано в групу")}catch(e){toast(e.message,"er")}b.disabled=false};
@@ -690,7 +734,7 @@ VIEWS.admin=v=>{
 
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
-function endSession(msg){if(typeof sfx==="function")sfx("sys");
+function endSession(msg){sfx("sys");
   S.user=null;S.token=null;try{sessionStorage.removeItem("tk")}catch(e){}
   clearInterval(S.poll);$("#app").classList.add("hide");$("#login").classList.remove("hide");
   $("#lerr").textContent=msg||"Сесію завершено. Потрібно перепідключитися. Всі підтверджені дії збережені.";
@@ -708,10 +752,9 @@ async function login(){
 
 $("#lbtn").onclick=login;$("#pw").onkeydown=e=>{if(e.key==="Enter")login()};
 if(!CONFIG.API_URL){$("#prev").classList.remove("hide");$("#prev").onclick=()=>{S.preview=true;S.user={name:"Режим перегляду",role:"admin"};showApp()}}
-else if(S.token)api("me").then(u=>{S.user=u;showApp()}).catch(()=>{});
+else if(S.token)api("me").then(u=>{if(!u)return;S.user=u;showApp()}).catch(()=>{});
 
 ["click","keydown","pointermove"].forEach(ev=>document.addEventListener(ev,()=>{S.act=true},{passive:true}));
-
 </script>
 </body>
 </html>
