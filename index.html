@@ -236,7 +236,7 @@ input[type=range]{padding:0;accent-color:var(--ac)}
 <div id="toast"></div>
 <script>
 /* ===== CONFIG ===== */
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbw771CiJTsmMvCxVUzmiUWtolWwgvkvJ_DzUgBkldApZ5jqTY9B83TxOPHiO9RJJJ-s-Q/exec",POLL_MS:4000,CAPACITY:3500};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbw6znuQOuRc-ZvgsPrwwbELr7iCXNfutVX_zeM8NOoN_rd7eMSMl9qqEbBwf7wOgSgsmg/exec",POLL_MS:4000,CAPACITY:3500};
 
 /* ===== api: повтори (той самий requestId → без дублів) ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false,c:{},cur:{}};
@@ -468,9 +468,7 @@ const mySk=()=>S.preview?99:(+S.user?.skill||1);
 const lockR=r=>!r.na&&r.skill>mySk();
 const totalNow=()=>S.total??Object.values(S.inv).reduce((a,b)=>a+b,0);
 const maxCy=r=>{if(r.na||lockR(r))return 0;
-  let m=Math.min(...Object.entries(r.ing).map(([n,q])=>Math.floor(stock(n)/q)));
-  const used=Object.values(r.ing).reduce((a,b)=>a+b,0),net=r.yield-used;
-  if(net>0)m=Math.min(m,Math.floor((CONFIG.CAPACITY-totalNow())/net));
+  const m=Math.min(...Object.entries(r.ing).map(([n,q])=>Math.floor(stock(n)/q)));
   return Math.max(0,m)};
 let craftCat=0,craftQ="",craftOnly=false;
 VIEWS.craft=async v=>{
@@ -484,7 +482,7 @@ VIEWS.craft=async v=>{
     const m=maxCy(r);
     return`<div class="card rc">${ph(r)}<h3>${esc(r.name)}</h3><div class="meta">Вміння: ${r.skill} · ${fmtT(r.time)} · вихід: ${r.yield} · на складі: <b>${stock(r.name)}</b></div>
     ${Object.entries(r.ing).map(([n,q])=>`<div class="ing ${stock(n)<q?"bad":""}"><span>${esc(n)}</span><span>${stock(n)} / ${q}</span></div>`).join("")}
-    <div class="meta">${m>0?"✅ Можна зробити циклів: <b>"+m+"</b>":"⛔ Не вистачає ресурсів або місця на складі"}</div><button class="btn" data-r="${r.id}" ${m>0?"":"disabled"}>Створити</button></div>`};
+    <div class="meta">${m>0?"✅ Можна зробити циклів: <b>"+m+"</b>":"⛔ Не вистачає ресурсів"}</div><button class="btn" data-r="${r.id}" ${m>0?"":"disabled"}>Створити</button></div>`};
   const draw=()=>{const q=craftQ.trim().toLowerCase();
     $("#cc").innerHTML=CATS.map((c,i)=>`<span class="chip ${!q&&i===craftCat?"on":""}" data-i="${i}">${ICON[i]} ${c}</span>`).join("");
     const l=RECIPES.filter(r=>(q?r.name.toLowerCase().includes(q):r.cat===craftCat)&&(!craftOnly||can(r)));
@@ -505,11 +503,10 @@ function craftPanel(r){
     const used=ins.reduce((a,x)=>a+x[1],0),out=r.yield*c,fin=total()-used+out,w=[];
     if(lockR(r))w.push("Недостатньо вміння: потрібно "+r.skill+", у вас "+mySk());
     ins.forEach(([n,q,s])=>{if(s<q)w.push(`Не вистачає: ${n} (${q-s})`)});
-    if(fin>CONFIG.CAPACITY)w.push("Перевищено місткість складу "+CONFIG.CAPACITY);
     if(!CONFIG.API_URL)w.push("Сервер не підключено");
     let cost=0,unk=0;ins.forEach(([n,q])=>{const p=S.prices[n];if(p==null)unk++;else cost+=p*q});
     const pp=S.prices[r.name],rev=pp==null?null:pp*out,pf=rev==null?null:rev-cost;
-    $("#sm").innerHTML=`<p class="meta">Час: ${fmtT(r.time*c)} · Продукції на склад: <b>${out}</b></p><div style="overflow-x:auto"><table><tr><th>Інгредієнт</th><th>Списати</th><th>Є</th><th>Залишиться</th><th>Ціна/од. $</th><th>Вартість</th></tr>${ins.map(([n,q,s])=>`<tr><td>${esc(n)}</td><td>${q}</td><td class="${s<q?"bad":""}">${s}</td><td>${s-q}</td><td>${pin(n,S.prices[n],80)}</td><td>${S.prices[n]==null?"—":money(S.prices[n]*q)}</td></tr>`).join("")}</table></div><p class="meta">Склад після операції: ${fin} / ${CONFIG.CAPACITY}</p>
+    $("#sm").innerHTML=`<p class="meta">Час: ${fmtT(r.time*c)} · Продукції на склад: <b>${out}</b></p><div style="overflow-x:auto"><table><tr><th>Інгредієнт</th><th>Списати</th><th>Є</th><th>Залишиться</th><th>Ціна/од. $</th><th>Вартість</th></tr>${ins.map(([n,q,s])=>`<tr><td>${esc(n)}</td><td>${q}</td><td class="${s<q?"bad":""}">${s}</td><td>${s-q}</td><td>${pin(n,S.prices[n],80)}</td><td>${S.prices[n]==null?"—":money(S.prices[n]*q)}</td></tr>`).join("")}</table></div><p class="meta">Склад після операції: ${fin}</p>
     <div class="rw"><span>Витрати на матеріали${unk?` <small>(без ${unk} поз. — ціну не вказано)</small>`:""}</span><b class="er">${money(cost)}</b></div>
     <div class="rw"><span>Ціна продажу «${esc(r.name)}» за од.</span>${pin(r.name,pp)}</div>
     <div class="rw"><span>Очікувана виручка (${out} од.)</span><b class="gd">${rev==null?"—":money(rev)}</b></div>
@@ -531,8 +528,8 @@ VIEWS.stock=v=>{
   let D=null;const low=i=>i.min>0&&i.qty<=i.min,canEd=isAdmin()||(S.user?.perms||"").split(",").includes("stock_edit");
   const tb=d=>{const q=stF.q.toLowerCase(),l=d.items.filter(i=>(!stF.c||i.category===stF.c)&&(!stF.low||low(i))&&(!q||i.name.toLowerCase().includes(q)));
     return tbl([["name","Назва",o=>`<b>${esc(o.name)}</b>`],["category","Категорія"],["qty","К-сть",o=>`<b class="${low(o)?"lowq":""}">${o.qty}</b>${low(o)?" "+bdg("мало","er"):""}`],["listed","На продажі",o=>o.listed?bdg(o.listed+" шт","gd"):"—"],["min","Мін."],["unit","Од."],["updated","Змінено"],["a","",o=>canEd?ra(o.id,[["edit","Змінити"]]):""]],l)};
-  const head=d=>{const pc=Math.round(d.total/d.capacity*100),ln=d.items.filter(low).length,ls=d.items.reduce((a,i)=>a+i.listed,0),cats=[...new Set(d.items.map(i=>i.category))];
-    return`<div class="scs">${sc("Заповненість","📦",pc+"%",d.total+" / "+d.capacity+" слотів")}${sc("Позицій","🧪",d.items.length,"Найменувань")}${sc("Низькі залишки","⚠️",ln,"Потребують поповнення",ln?"er":"")}${sc("На продажі","🛒",ls,"Не займають слотів","gd")}</div><div class="bar"><i style="width:${Math.min(100,pc)}%"></i></div>${pc>=90?'<div class="warn">Склад майже заповнений</div>':""}
+  const head=d=>{const ln=d.items.filter(low).length,ls=d.items.reduce((a,i)=>a+i.listed,0),cats=[...new Set(d.items.map(i=>i.category))];
+    return`<div class="scs">${sc("Всього на складі","📦",d.total,"одиниць")}${sc("Позицій","🧪",d.items.length,"Найменувань")}${sc("Низькі залишки","⚠️",ln,"Потребують поповнення",ln?"er":"")}${sc("На продажі","🛒",ls,"Не займають слотів","gd")}</div>
     <div class="tools"><input id="fq" placeholder="🔍 Пошук за назвою" value="${esc(stF.q)}"><span class="chip ${stF.low?"on":""}" data-lw="1">⚠️ Лише низькі</span></div>
     <div class="chips">${["",...cats].map(c=>`<span class="chip ${c===stF.c?"on":""}" data-cf="${esc(c)}">${c?esc(c):"Усі"}</span>`).join("")}</div>`};
   const body=d=>`<div id="stt">${tb(d)}</div>`;
@@ -738,7 +735,7 @@ const LT=["","login","logout","craft","stock","product","buy","order","alert","a
 const dl=(n,csv)=>{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));a.download=n;a.click()};
 const rowAct=(b,fn)=>{b.onclick=async e=>{const t=e.target.closest("[data-a]");if(t)await fn(t.dataset.a,t.dataset.id)}};
 const TABS={
-over:b=>{page(b,"Огляд системи","admin.overview",{},d=>`<div class="scs">${sc("Користувачі","👥",d.users,"Онлайн: "+d.online)}${sc("Склад","📦",d.units,"з "+d.capacity+" одиниць")}${sc("Предметів","🧪",d.items,"У довіднику")}${sc("Рецептів","📜",d.recipes,"Активних")}${sc("Крафтів","⚗️",d.crafts,"За весь час")}${sc("Записів журналу","🗂️",d.logs,"У базі")}</div>
+over:b=>{page(b,"Огляд системи","admin.overview",{},d=>`<div class="scs">${sc("Користувачі","👥",d.users,"Онлайн: "+d.online)}${sc("Склад","📦",d.units,"одиниць на складі")}${sc("Предметів","🧪",d.items,"У довіднику")}${sc("Рецептів","📜",d.recipes,"Активних")}${sc("Крафтів","⚗️",d.crafts,"За весь час")}${sc("Записів журналу","🗂️",d.logs,"У базі")}</div>
   <div class="card">${[["Telegram: токен бота",d.tg],["Telegram: чат за замовчуванням",d.chat]].map(([l,x])=>`<div class="rw"><span>${l}</span>${x?bdg("Налаштовано","ok"):bdg("Не задано","er")}</div>`).join("")}<div class="rw"><span>Технічні роботи</span>${d.maint?bdg("Увімкнено","er"):bdg("Вимкнено","ok")}</div></div>
   <div class="card" style="margin-top:16px"><h3 style="margin-bottom:10px">Експорт таблиць (CSV)</h3><div class="chips">${SHEETS.map(n=>`<span class="chip" data-x="${n}">⬇ ${n}</span>`).join("")}</div></div>`,"",true);
   b.onclick=async e=>{const x=e.target.closest("[data-x]")?.dataset.x;if(!x)return;try{const f=await api("admin.exportSheet",{name:x});dl(f.name,f.csv)}catch(er){toast(er.message,"er")}}},
@@ -791,9 +788,9 @@ tg:b=>{
 maint:b=>{page(b,"Рестарти / технічні роботи (Europe/Kyiv)","admin.maintList",{},d=>tbl([["when","Коли"],["type","Тип"],["reason","Причина"],["status","Статус"],["a","",o=>ra(o.id,[["cancel","Скасувати"]])]],d),`<button class="btn" id="b1">Запланувати</button>`);
   $("#b1").onclick=()=>form("Рестарт",[{k:"type",l:"Тип",o:[["now","Негайно"],["once","Одноразово"],["daily","Щодня"]]},{k:"when",l:"Дата й час (Київ) для одноразового",t:"datetime-local"},{k:"daily",l:"Час щодня (ГГ:ХХ)"},{k:"scenario",l:"Сценарій",o:[["logout","Завершити сесії"],["reconnect","Примусове перепідключення"]]},{k:"reason",l:"Причина"},{k:"message",l:"Повідомлення",v:"Потрібно перепідключитися. Всі підтверджені дії збережені."}],async x=>{await api("admin.maintenance",x);go("admin")});
   rowAct(b,async(a,id)=>{if(await act("admin.maintCancel",{id}))go("admin")})},
-settings:b=>{const K=[["idleMinutes","Бездіяльність до відключення, хв","number"],["capacity","Складський ліміт","number"],["defaultChatId","Telegram chat ID за замовчуванням"]];
+settings:b=>{const K=[["idleMinutes","Бездіяльність до відключення, хв","number"],["defaultChatId","Telegram chat ID за замовчуванням"]];
   page(b,"Налаштування","admin.settings",{},d=>K.map(([k,l,t])=>`<label>${l}</label><input id="s_${k}" type="${t||"text"}" value="${esc(d[k]??"")}">`).join("")+`<p class="meta" style="margin-top:12px">Токен Telegram зберігається лише у Властивостях скрипта.</p>`,`<button class="btn" id="b1">Зберегти</button>`);
-  $("#b1").onclick=async()=>{const d={};K.forEach(([k,,t])=>{const e=$("#s_"+k);if(e)d[k]=t?+e.value:e.value});if(await act("admin.settingsSave",d))CONFIG.CAPACITY=d.capacity||CONFIG.CAPACITY}}
+  $("#b1").onclick=async()=>{const d={};K.forEach(([k,,t])=>{const e=$("#s_"+k);if(e)d[k]=t?+e.value:e.value});await act("admin.settingsSave",d)}}
 };
 VIEWS.admin=v=>{
   if(!isAdmin()){v.innerHTML='<div class="warn">Доступ заборонено</div>';return}
