@@ -799,39 +799,45 @@ VIEWS.admin=v=>{
   v.onclick=e=>{const t=e.target.dataset.t;if(t){AT=t;VIEWS.admin(v)}};
   TABS[AT]($("#at"));
 };
-/* ===== СХЕМА КРАФТУ (вставити перед рядком: /* ===== авторизація та сесія ===== *\/ ) ===== */
+/* ===== СХЕМА КРАФТУ v2 (видаліть старий блок v1 і вставте цей перед: /* ===== авторизація та сесія ===== *\/ ) ===== */
 (function(){
 const st=document.createElement("style");st.textContent=`
-.sch{display:flex;gap:44px;overflow-x:auto;padding:10px 4px 18px;align-items:stretch}
-.scol{display:flex;flex-direction:column;gap:12px;min-width:210px;position:relative;justify-content:center}
-.scol+.scol::before{content:"➜";position:absolute;left:-32px;top:50%;transform:translateY(-50%);color:var(--ac);font-size:20px;text-shadow:0 0 12px rgba(247,183,51,.6)}
-.sct{font-size:10.5px;letter-spacing:1.2px;color:var(--mu);font-weight:700;text-align:center;margin-bottom:2px}
-.sk2{display:flex;flex-direction:column;gap:3px;padding:12px;border-radius:14px;border:1px solid var(--bd);background:linear-gradient(160deg,rgba(15,38,55,.96),rgba(9,26,38,.92));animation:rise .4s both;transition:transform .2s,box-shadow .2s}
-.sk2:hover{transform:translateY(-3px);box-shadow:0 0 22px rgba(47,217,187,.18)}
-.sk2.rw0{border-color:rgba(47,217,187,.35)}.sk2.mid{border-color:rgba(247,183,51,.35)}
-.sk2.fin{border-color:var(--ac);box-shadow:0 0 26px rgba(247,183,51,.28);background:linear-gradient(160deg,rgba(60,42,8,.55),rgba(9,26,38,.92))}
+.sov{position:fixed;inset:0;z-index:80;background:rgba(5,14,23,.97);backdrop-filter:blur(8px);display:flex;flex-direction:column;animation:rise .25s both}
+.soh{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:12px 22px;border-bottom:1px solid var(--bd);background:rgba(11,34,52,.9)}
+.soh h3{font-size:19px;color:var(--ac);margin-right:auto}
+.sob{flex:1;overflow:auto;padding:18px 22px}
+.sch{position:relative;display:flex;gap:84px;padding:10px 6px 24px;overflow:auto;align-items:stretch}
+.sch svg.ln{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.ln path{fill:none;stroke:rgba(247,183,51,.38);stroke-width:2;transition:stroke .2s}
+.ln path.hl{stroke:var(--ac);stroke-width:3;filter:drop-shadow(0 0 6px var(--ac))}
+.sch.dim .ln path:not(.hl){stroke:rgba(255,255,255,.06)}
+.scol{flex:none;width:236px;display:flex;flex-direction:column;justify-content:center;gap:14px;position:relative;z-index:1}
+.sct{font-size:10.5px;letter-spacing:1.3px;color:var(--mu);font-weight:700;text-align:center}
+.sk2{padding:12px;border-radius:14px;border:1px solid var(--bd);background:linear-gradient(160deg,rgba(15,38,55,.97),rgba(9,26,38,.95));cursor:pointer;display:flex;flex-direction:column;gap:3px;transition:transform .2s,box-shadow .2s}
+.sk2:hover{transform:translateY(-2px);box-shadow:0 0 22px rgba(47,217,187,.2)}
+.sk2.rw0{border-color:rgba(47,217,187,.4)}.sk2.mid{border-color:rgba(247,183,51,.4)}
+.sk2.fin{border-color:var(--ac);box-shadow:0 0 28px rgba(247,183,51,.3);background:linear-gradient(160deg,rgba(70,48,8,.6),rgba(9,26,38,.95))}
 .sk2h{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .sk2q{font-size:22px;font-weight:800;color:var(--ac)}
-.sk2c{font-weight:700;color:var(--ok)}
-.sk2n{margin-top:4px;padding:6px 8px;border-radius:9px;background:rgba(47,217,187,.08);color:var(--tl);font-size:12px}
-.stepl{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--bd);font-size:12.5px;align-items:flex-start}
-.stepl:last-child{border:0}.stepl i{font-style:normal;flex:0 0 28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#ffd366,#f2a516);color:#2a1a00;font-weight:800;display:grid;place-items:center}
+.sk2d{margin-top:8px;padding-top:8px;border-top:1px dashed var(--bd);cursor:default}
+.sk2n{padding:6px 8px;border-radius:9px;background:rgba(47,217,187,.09);color:var(--tl);font-size:12px;margin:6px 0}
+.sk2 textarea{font-size:12px;margin-top:6px}
+.cb{display:grid;grid-template-columns:130px 1fr 70px;gap:10px;align-items:center;font-size:12.5px;padding:3px 0}.cb .bar{margin:0}
 `;document.head.append(st);
 PAGES.splice(PAGES.findIndex(p=>p[0]==="calc")+1,0,["scheme","🧬","Схема крафту"]);
 
-/* предмети, яких може не бути в довіднику: час 5 хв = 300 с */
+/* запасні рецепти (лише для схеми, якщо їх ще немає в базі); 5 хв = 300 с */
 const EXTRA=[
  {name:"Порожній шприц",cat:7,skill:1,time:300,yield:100,ing:{"Пісок":100,"Залізний злиток":3}},
  {name:"Порожній флакон",cat:7,skill:1,time:300,yield:100,ing:{"Пісок":50,"Корок":25}},
  {name:"Порожня банка",cat:7,skill:1,time:300,yield:50,ing:{"Пісок":100,"Корок":50}}];
 const REC=()=>[...RECIPES.filter(r=>!r.na&&r.ing),...EXTRA.filter(e=>!RECIPES.some(r=>r.name===e.name))];
-let SCH={cat:7,n:"Порожній флакон",q:1};
+let SCH={cat:0,q:""},ITEMS={};
 
-function calc(name,q){
+function calc(name,qty){
   const rm=Object.fromEntries(REC().map(r=>[r.name,r])),L={};
-  const lv=n=>L[n]??(L[n]=0,L[n]=rm[n]?1+Math.max(0,...Object.keys(rm[n].ing).map(lv)):0);
-  lv(name);
-  const order=Object.keys(L).sort((a,b)=>L[b]-L[a]),need={[name]:q},cy={};
+  const lv=n=>L[n]??(L[n]=0,L[n]=rm[n]?1+Math.max(0,...Object.keys(rm[n].ing).map(lv)):0);lv(name);
+  const order=Object.keys(L).sort((a,b)=>L[b]-L[a]),need={[name]:qty},cy={};
   order.forEach(n=>{const r=rm[n];if(!r)return;cy[n]=Math.ceil(need[n]/r.yield);Object.entries(r.ing).forEach(([i,p])=>need[i]=(need[i]||0)+cy[n]*p)});
   const U={},uc=(n,g=[])=>{if(n in U)return U[n];const r=rm[n];if(!r||g.includes(n))return U[n]=+S.prices[n]||0;
     return U[n]=Object.entries(r.ing).reduce((a,[i,p])=>a+p*uc(i,[...g,n]),0)/r.yield};
@@ -840,49 +846,97 @@ function calc(name,q){
 
 VIEWS.scheme=async v=>{
   const t=S.cur;v.onclick=null;v.oninput=null;
-  v.innerHTML=`<div class="top"><h2>Схема крафту</h2><div id="adm"></div></div>${noSrv()}<div class="card"><div class="chips" id="s1"></div><div class="chips" id="s2"></div><label>Скільки потрібно готової продукції</label><div class="stp"><button class="btn ghost" data-d="-10">−10</button><input id="sq" type="number" min="1" value="${SCH.q}"><button class="btn ghost" data-d="10">+10</button><button class="btn ghost" data-d="100">+100</button></div></div><div id="so" style="margin-top:14px"></div>`;
+  v.innerHTML=`<div class="top"><h2>Схема крафту</h2><div>${isAdmin()?'<button class="btn ghost" id="mg">🧹 Керування предметами</button>':""}</div></div>${noSrv()}<div class="tools"><input id="sq" placeholder="🔍 Знайти препарат…" value="${esc(SCH.q)}"></div><div class="chips" id="sc"></div><div class="grid" id="sg">${SK}</div>`;
   await ready();if(t!==S.cur)return;
-  const items={};
-  if(CONFIG.API_URL&&!S.preview)try{((await api("inventory.list")).items||[]).forEach(i=>items[i.name]=i)}catch(e){}
-  const missing=()=>[...new Set(EXTRA.flatMap(e=>[e.name,...Object.keys(e.ing)]))].filter(n=>!items[n]);
-  const draw=()=>{
-    const all=REC();
-    let l=all.filter(r=>r.cat===SCH.cat);
-    if(!all.find(r=>r.name===SCH.n&&r.cat===SCH.cat))SCH.n=l[0]?.name||null;
-    $("#s1").innerHTML=CATS.map((c,i)=>`<span class="chip ${i===SCH.cat?"on":""}" data-c="${i}">${ICON[i]} ${c}</span>`).join("");
-    $("#s2").innerHTML=l.map(r=>`<span class="chip ${r.name===SCH.n?"on":""}" data-n="${esc(r.name)}">${esc(r.name)}</span>`).join("")||'<span class="meta">Немає рецептів</span>';
-    $("#adm").innerHTML=CONFIG.API_URL&&!S.preview&&isAdmin()&&(missing().length||EXTRA.some(e=>!RECIPES.some(r=>r.name===e.name)))?`<button class="btn" id="mk">➕ Додати шприц/флакон/банку та сировину в базу</button>`:"";
-    if(!SCH.n){$("#so").innerHTML="";return}
-    const{rm,L,need,cy,uc,order}=calc(SCH.n,SCH.q),r=rm[SCH.n],out=cy[SCH.n]*r.yield;
-    let raw=0,unk=0,time=0;
-    order.forEach(n=>{if(rm[n])time+=cy[n]*rm[n].time;else if(S.prices[n]==null)unk++;else raw+=S.prices[n]*need[n]});
-    const card=n=>{const x=rm[n],p=S.prices[n],st=stock(n),nt=items[n]?.note;
-      return`<div class="sk2 ${x?(n===SCH.n?"fin":"mid"):"rw0"}"><div class="sk2h"><b>${esc(n)}</b>${bdg(x?"крафт":"сировина",x?"gd":"tl")}</div><div class="sk2q">× ${need[n]}</div>
-      ${x?`<div class="meta">${cy[n]} цикл. × ${x.yield} шт · ${fmtT(cy[n]*x.time)}</div>`:""}
-      <div class="meta">На складі: <b class="${st<need[n]?"er":"ok"}">${st}</b></div>
-      <div class="sk2c">≈ ${money(need[n]*uc(n))}${!x&&p==null?' <small class="meta">(ціну не вказано)</small>':""}</div>
-      ${nt?`<div class="sk2n">📍 ${esc(nt)}</div>`:""}${isAdmin()&&items[n]?`<button class="btn ghost" style="margin-top:6px" data-e="${esc(n)}">✎ Де взяти / опис</button>`:""}</div>`};
-    const mx=L[SCH.n],cols=[...Array(mx+1)].map((_,k)=>order.filter(n=>L[n]===k));
-    const steps=[...order].reverse().filter(n=>rm[n]);
-    $("#so").innerHTML=`<div class="scs">${sc("Собівартість","🧾",money(raw),unk?"без "+unk+" поз. без ціни":"вся сировина","gd")}${sc("За одиницю","🏷️",money(out?raw/out:0),"вихід: "+out+" од.")}${sc("Загальний час","⏱️",fmtT(time),"усі етапи послідовно")}${sc("Етапів","🧬",steps.length,"від сировини до результату")}</div>
-    <div class="card"><div class="ch"><h3>Схема: від сировини до «${esc(SCH.n)}»</h3></div><div class="sch">${cols.map((c,k)=>`<div class="scol"><div class="sct">${k===0?"СИРОВИНА":k===mx?"РЕЗУЛЬТАТ":"ЕТАП "+k}</div>${c.map(card).join("")}</div>`).join("")}</div></div>
-    <div class="card" style="margin-top:14px"><div class="ch"><h3>Покроковий план А→Я</h3></div>
-    <div class="stepl"><i>0</i><div>Придбати/зібрати сировину: ${order.filter(n=>!rm[n]).map(n=>`<b>${esc(n)}</b> ×${need[n]}`).join(", ")||"—"}</div></div>
-    ${steps.map((n,i)=>`<div class="stepl"><i>${i+1}</i><div>Створити <b>${esc(n)}</b>: ${cy[n]} цикл. → ${cy[n]*rm[n].yield} шт · ${fmtT(cy[n]*rm[n].time)}<br><small class="meta">з: ${Object.entries(rm[n].ing).map(([a,p])=>esc(a)+" ×"+p*cy[n]).join(", ")}</small></div></div>`).join("")}</div>`};
+  if(CONFIG.API_URL&&!S.preview)try{ITEMS={};((await api("inventory.list")).items||[]).forEach(i=>ITEMS[i.name]=i)}catch(e){}
+  const draw=()=>{const q=SCH.q.trim().toLowerCase();
+    $("#sc").innerHTML=CATS.map((c,i)=>`<span class="chip ${!q&&i===SCH.cat?"on":""}" data-c="${i}">${ICON[i]} ${c}</span>`).join("");
+    const l=REC().filter(r=>q?r.name.toLowerCase().includes(q):r.cat===SCH.cat);
+    $("#sg").innerHTML=l.map(r=>{const k=calc(r.name,r.yield),tm=Object.keys(k.cy).reduce((a,n)=>a+k.cy[n]*k.rm[n].time,0);
+      return`<div class="card rc" data-o="${esc(r.name)}" style="cursor:pointer">${ph(r)}<h3>${esc(r.name)}</h3><div class="meta">Вихід: ${r.yield} · етапів: ${Object.keys(k.cy).length} · ${fmtT(tm)}</div><div class="rw"><span>Собівартість / од.</span><b class="gd">${money(k.uc(r.name))}</b></div><button class="btn">🧬 Відкрити схему</button></div>`}).join("")||'<p class="meta">Нічого не знайдено</p>'};
   draw();
-  v.oninput=e=>{if(e.target.id==="sq"){SCH.q=Math.max(1,parseInt(e.target.value)||1);draw()}};
-  v.onclick=async e=>{
-    const c=e.target.closest("[data-c]"),n=e.target.closest("[data-n]"),d=e.target.closest("[data-e]");
-    if(c){SCH.cat=+c.dataset.c;SCH.n=null;return draw()}
-    if(n){SCH.n=n.dataset.n;return draw()}
-    if(d){const nm=d.dataset.e,i=items[nm];
-      return form("Де взяти / опис: "+nm,[{k:"note",l:"Опис (де брати предмет, хто продає, локація…)",t:"area",v:i.note}],async x=>{
-        await api("admin.itemSave",{id:i.id,category:i.category,unit:i.unit,min:i.min,note:x.note});i.note=x.note;draw()})}
-    if(e.target.closest("#mk")){const b=$("#mk");b.disabled=true;
-      for(const nm of missing()){try{await api("admin.itemSave",{name:nm,category:EXTRA.some(x=>x.name===nm)?"Інгредієнти":"Сировина",unit:"шт",min:0,note:""})}catch(x){}}
-      for(const r of EXTRA)if(!RECIPES.some(x=>x.name===r.name)){try{await api("admin.recipeSave",{name:r.name,cat:r.cat,skill:r.skill,time:r.time,yield:r.yield,ing:r.ing,enabled:"1"})}catch(x){toast(x.message,"er")}}
-      S.bp=loadRef();await S.bp;toast("Предмети та рецепти додано");go("scheme")}};
+  $("#sq").oninput=e=>{SCH.q=e.target.value;draw()};
+  if($("#mg"))$("#mg").onclick=()=>mgr();
+  v.onclick=e=>{const c=e.target.closest("[data-c]"),o=e.target.closest("[data-o]");
+    if(c){SCH.cat=+c.dataset.c;SCH.q="";$("#sq").value="";draw()}else if(o)openSchema(o.dataset.o,draw)};
 };
+
+function openSchema(name,after){
+  const o=document.createElement("div");o.className="sov";
+  o.innerHTML=`<div class="soh"><h3>🧬 Схема: ${esc(name)}</h3><span class="meta">Порції:</span><div class="stp"><button class="btn ghost" data-d="-1">−</button><input id="oq" type="number" min="1" value="1"><button class="btn ghost" data-d="1">+</button><button class="btn ghost" data-d="10">+10</button></div><button class="btn ghost" id="cpa">📋 Копіювати всі етапи</button><button class="btn ghost" id="cl">✕</button></div><div class="sob" id="sob"></div>`;
+  document.body.append(o);
+  let q=1,ex=new Set(),G=null;
+  const close=()=>{o.remove();document.removeEventListener("keydown",esc_);if(after)after()},esc_=e=>{if(e.key==="Escape")close()};
+  document.addEventListener("keydown",esc_);
+  const cp=s=>navigator.clipboard.writeText(s).then(()=>toast("Скопійовано")).catch(()=>toast("Не вдалося скопіювати","er"));
+  const render=()=>{
+    const{rm,L,need,cy,uc,order}=calc(name,q*rm0().yield);G={rm,need,cy,order};
+    const r=rm[name],out=cy[name]*r.yield;let raw=0,unk=0,time=0;
+    order.forEach(n=>{if(rm[n])time+=cy[n]*rm[n].time;else if(S.prices[n]==null)unk++;else raw+=S.prices[n]*need[n]});
+    const mx=L[name],cols=[...Array(mx+1)].map((_,k)=>order.filter(n=>L[n]===k));
+    const card=n=>{const x=rm[n],p=S.prices[n],s=stock(n),nt=ITEMS[n]?.note,op=ex.has(n);
+      return`<div class="sk2 ${x?(n===name?"fin":"mid"):"rw0"}" data-k="${esc(n)}"><div class="sk2h"><b>${esc(n)}</b>${bdg(x?"рецепт":"сировина",x?"gd":"tl")}</div><div class="sk2q">× ${need[n]}${x&&n!==name?` <small class="meta">база ${x.yield}</small>`:""}</div>
+      <div class="meta">На складі: <b class="${s<need[n]?"er":"ok"}">${s}</b> · ≈ <b class="gd">${money(need[n]*uc(n))}</b></div>${op?"":'<small class="meta">клік — розгорнути</small>'}
+      ${op?`<div class="sk2d">${x?`<div class="meta">${cy[n]} цикл. × ${x.yield} шт · ${fmtT(cy[n]*x.time)}</div>${Object.entries(x.ing).map(([a,pp])=>`<div class="ing"><span>${esc(a)}</span><span>×${pp*cy[n]} · ${money(uc(a))}</span></div>`).join("")}<div class="rw"><span>Собівартість/од.</span><b class="gd">${money(uc(n))}</b></div>`:`<div class="rw"><span>Ціна/од. $</span>${pin(n,p,84)}</div>`}
+      ${nt?`<div class="sk2n">📍 ${esc(nt)}</div>`:""}${isAdmin()&&ITEMS[n]?`<textarea class="nt" rows="2" placeholder="Де брати / опис">${esc(nt||"")}</textarea><div class="ra"><button class="btn ghost" data-sn="${esc(n)}">💾 Зберегти опис</button></div>`:""}
+      <div class="ra"><button class="btn ghost" data-cp="${esc(n)}">Копіювати</button>${x?`<button class="btn ghost" data-cr="${esc(n)}">У крафт →</button>`:""}</div></div>`:""}</div>`};
+    const tot=order.filter(n=>!rm[n]&&S.prices[n]!=null).map(n=>[n,S.prices[n]*need[n]]).sort((a,b)=>b[1]-a[1]);
+    $("#sob").innerHTML=`<div class="scs">${sc("Собівартість","🧾",money(raw),unk?"без "+unk+" поз. без ціни":"вся сировина","gd")}${sc("За одиницю","🏷️",money(out?raw/out:0),"вихід: "+out+" од.")}${sc("Загальний час","⏱️",fmtT(time),"усі етапи")}${sc("Етапів","🧬",Object.keys(cy).length,"від сировини до фіналу")}</div>
+    <div class="sch" id="sch"><svg class="ln"></svg>${cols.map((c,k)=>`<div class="scol"><div class="sct">${k===0?"СИРОВИНА":k===mx?"РЕЗУЛЬТАТ":"ЕТАП "+k}</div>${c.map(card).join("")}</div>`).join("")}</div>
+    <div class="card" style="margin-top:14px"><div class="ch"><h3>Структура собівартості</h3></div>${tot.map(([n,c])=>`<div class="cb"><span>${esc(n)}</span><span class="bar"><i style="width:${Math.round(c/(raw||1)*100)}%"></i></span><b class="gd">${money(c)}</b></div>`).join("")||'<p class="meta">Вкажіть ціни сировини — вони з\'являться тут.</p>'}</div>`;
+    requestAnimationFrame(lines);
+  };
+  const rm0=()=>REC().find(r=>r.name===name);
+  const lines=()=>{const sch=$("#sch",o);if(!sch||!G)return;const b=sch.getBoundingClientRect(),el={};
+    sch.querySelectorAll(".sk2").forEach(e=>el[e.dataset.k]=e);let d="";
+    G.order.forEach(n=>{const x=G.rm[n];if(!x)return;Object.keys(x.ing).forEach(i=>{if(!el[i]||!el[n])return;
+      const a=el[i].getBoundingClientRect(),c=el[n].getBoundingClientRect(),x1=a.right-b.left+sch.scrollLeft,y1=a.top+a.height/2-b.top+sch.scrollTop,x2=c.left-b.left+sch.scrollLeft,y2=c.top+c.height/2-b.top+sch.scrollTop,m=(x1+x2)/2;
+      d+=`<path data-f="${esc(i)}" data-t="${esc(n)}" d="M${x1} ${y1}C${m} ${y1} ${m} ${y2} ${x2} ${y2}"/>`})});
+    const sv=$("svg.ln",sch);sv.setAttribute("width",sch.scrollWidth);sv.setAttribute("height",sch.scrollHeight);sv.innerHTML=d};
+  o.oninput=e=>{if(e.target.id==="oq"){q=Math.max(1,parseInt(e.target.value)||1);render()}};
+  o.onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){render();toast("Ціну збережено")}};
+  o.onmouseover=e=>{const k=e.target.closest(".sk2")?.dataset.k,sch=$("#sch",o);if(!sch)return;
+    sch.classList.toggle("dim",!!k);sch.querySelectorAll("path").forEach(p=>p.classList.toggle("hl",!!k&&(p.dataset.f===k||p.dataset.t===k)))};
+  o.onclick=async e=>{const T=e.target;
+    if(T.closest("#cl"))return close();
+    if(T.closest("#cpa")&&G)return cp(`Схема: ${name} ×${q}\n`+[...G.order].reverse().map(n=>`${G.rm[n]?"Крафт":"Сировина"}: ${n} ×${G.need[n]}`).join("\n"));
+    const c=T.closest("[data-cp]");if(c)return cp(c.dataset.cp+" ×"+G.need[c.dataset.cp]);
+    const g=T.closest("[data-cr]");if(g){const r=RECIPES.find(x=>x.name===g.dataset.cr);if(!r)return toast("Цього рецепта ще немає в базі","er");craftCat=r.cat;close();return go("craft")}
+    const s=T.closest("[data-sn]");if(s){const i=ITEMS[s.dataset.sn],note=s.closest(".sk2").querySelector(".nt").value;
+      try{await api("admin.itemSave",{id:i.id,category:i.category,unit:i.unit,min:i.min,note});i.note=note;toast("Опис збережено");render()}catch(x){toast(x.message,"er")}return}
+    if(T.closest("input,textarea,button,.sk2d"))return;
+    const k=T.closest(".sk2")?.dataset.k;if(k){ex.has(k)?ex.delete(k):ex.add(k);render()}};
+  render();
+}
+
+/* ===== адмін: перегляд і видалення предметів/рецептів, пошук дублікатів ===== */
+async function mgr(){
+  const m=pnl(`<div class="ph2"><h3>🧹 Предмети та рецепти</h3><button class="btn ghost x">✕</button></div><div id="mgb">${SK}</div>`);
+  m.querySelector(".x").onclick=()=>m.remove();
+  const load=async()=>{
+    let it,rc;try{[it,rc]=await Promise.all([api("admin.items"),api("admin.recipes")])}catch(e){$("#mgb",m).innerHTML=`<p class="meta">${esc(e.message)}</p>`;return}
+    it=it.filter(i=>i.active);rc=rc.filter(r=>!r.archived);
+    const cnt=a=>a.reduce((c,x)=>(c[x.name]=(c[x.name]||0)+1,c),{}),ci=cnt(it),cr=cnt(rc);
+    const nd=Object.values(ci).filter(n=>n>1).length+Object.values(cr).filter(n=>n>1).length;
+    const row=(o,c,a,extra)=>`<tr><td><b>${esc(o.name)}</b> ${c[o.name]>1?bdg("дубль ×"+c[o.name],"er"):""}</td><td>${extra}</td><td><button class="btn ghost" data-${a}="${esc(o.id)}">Видалити</button></td></tr>`;
+    $("#mgb",m).innerHTML=`<div class="ra" style="margin-bottom:10px"><button class="btn" id="dd" ${nd?"":"disabled"}>Видалити всі дублікати (${nd})</button><input id="mq" placeholder="🔍 Фільтр" style="max-width:220px"></div>
+    <h3 style="margin:8px 0">Предмети</h3>${`<div style="overflow-x:auto"><table class="mt"><tr><th>Назва</th><th>К-сть · категорія</th><th></th></tr>${it.map(o=>row(o,ci,"di",o.qty+" · "+esc(o.category))).join("")}</table></div>`}
+    <h3 style="margin:14px 0 8px">Рецепти</h3><div style="overflow-x:auto"><table class="mt"><tr><th>Назва</th><th>Категорія</th><th></th></tr>${rc.map(o=>row(o,cr,"dr",esc(CATS[o.cat]||""))).join("")}</table></div>`;
+    $("#mq",m).oninput=e=>m.querySelectorAll(".mt tr:not(:first-child)").forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(e.target.value.toLowerCase()));
+    const delI=id=>api("admin.itemDelete",{id}),delR=async id=>{try{await api("admin.recipeArchive",{id})}catch(e){}await api("admin.recipeDelete",{id})};
+    const fin=async()=>{S.bp=loadRef();await S.bp;await load()};
+    m.onclick=async e=>{const a=e.target.closest("[data-di]"),b=e.target.closest("[data-dr]");
+      if(a&&confirm("Видалити предмет? Його можна відновити в Адмін-панелі → Предмети."))try{await delI(a.dataset.di);toast("Видалено");await fin()}catch(x){toast(x.message,"er")}
+      if(b&&confirm("Видалити рецепт назавжди?"))try{await delR(b.dataset.dr);toast("Видалено");await fin()}catch(x){toast(x.message,"er")}
+      if(e.target.id==="dd"&&confirm("Лишити по одному запису кожної назви (для предметів — з найбільшою кількістю), решту видалити?")){
+        e.target.disabled=true;
+        const grp=(a,key)=>Object.values(a.reduce((c,x)=>((c[x.name]=c[x.name]||[]).push(x),c),{})).filter(g=>g.length>1);
+        try{for(const g of grp(it)){g.sort((x,y)=>(y.qty||0)-(x.qty||0));for(const x of g.slice(1))await delI(x.id)}
+          for(const g of grp(rc))for(const x of g.slice(1))await delR(x.id);
+          toast("Дублікати видалено");await fin()}catch(x){toast(x.message,"er");await fin()}}};
+  };
+  load();
+}
 })();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
