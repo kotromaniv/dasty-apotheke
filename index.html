@@ -236,7 +236,7 @@ input[type=range]{padding:0;accent-color:var(--ac)}
 <div id="toast"></div>
 <script>
 /* ===== CONFIG ===== */
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbz5v9za4CPEvoFICTH1iE9kElk7kK6q6LWVN6OW7_vGJO225tkUmQo8YNUcl0P5La3eKQ/exec",POLL_MS:4000,CAPACITY:3500};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbzB4oExJ-mb0mp7ur3Bq51eJuiOitun2HhXUxUBNaq4Iamq2ZqUaMO18T0LJmDcrv_8lw/exec",POLL_MS:4000,CAPACITY:3500};
 
 /* ===== api: повтори (той самий requestId → без дублів) ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false,c:{},cur:{}};
@@ -527,24 +527,24 @@ const stF={q:"",c:"",low:false};
 VIEWS.stock=v=>{
   let D=null;const low=i=>i.min>0&&i.qty<=i.min,canEd=isAdmin()||(S.user?.perms||"").split(",").includes("stock_edit");
   const tb=d=>{const q=stF.q.toLowerCase(),l=d.items.filter(i=>(!stF.c||i.category===stF.c)&&(!stF.low||low(i))&&(!q||i.name.toLowerCase().includes(q)));
-    return tbl([["name","Назва",o=>`<b>${esc(o.name)}</b>`],["category","Категорія"],["qty","К-сть",o=>`<b class="${low(o)?"lowq":""}">${o.qty}</b>${low(o)?" "+bdg("мало","er"):""}`],["listed","На продажі",o=>o.listed?bdg(o.listed+" шт","gd"):"—"],["min","Мін."],["unit","Од."],["updated","Змінено"],["a","",o=>canEd?ra(o.id,[["edit","Змінити"]]):""]],l)};
+    return tbl([["name","Назва",o=>`<b>${esc(o.name)}</b>`],["category","Категорія"],["loc","Місце",o=>esc(o.loc||"—")],["qty","К-сть",o=>`<b class="${low(o)?"lowq":""}">${o.qty}</b>${low(o)?" "+bdg("мало","er"):""}`],["listed","На продажі",o=>o.listed?bdg(o.listed+" шт","gd"):"—"],["min","Мін."],["unit","Од."],["updated","Змінено"],["a","",o=>canEd?ra(o.id,[["edit","Змінити"]]):""]],l)};
   const head=d=>{const ln=d.items.filter(low).length,ls=d.items.reduce((a,i)=>a+i.listed,0),cats=[...new Set(d.items.map(i=>i.category))];
     return`<div class="scs">${sc("Всього на складі","📦",d.total,"одиниць")}${sc("Позицій","🧪",d.items.length,"Найменувань")}${sc("Низькі залишки","⚠️",ln,"Потребують поповнення",ln?"er":"")}${sc("На продажі","🛒",ls,"Не займають слотів","gd")}</div>
     <div class="tools"><input id="fq" placeholder="🔍 Пошук за назвою" value="${esc(stF.q)}"><span class="chip ${stF.low?"on":""}" data-lw="1">⚠️ Лише низькі</span></div>
     <div class="chips">${["",...cats].map(c=>`<span class="chip ${c===stF.c?"on":""}" data-cf="${esc(c)}">${c?esc(c):"Усі"}</span>`).join("")}</div>`};
   const body=d=>`<div id="stt">${tb(d)}</div>`;
-  const edit=o=>form("Змінити: "+o.name,[{k:"qty",l:"Кількість на складі",t:"number",v:o.qty},{k:"min",l:"Мінімальний залишок",t:"number",v:o.min},
+  const edit=o=>form("Змінити: "+o.name,[{k:"qty",l:"Кількість на складі",t:"number",v:o.qty},{k:"min",l:"Мінімальний залишок",t:"number",v:o.min},{k:"loc",l:"Місце зберігання",v:o.loc},
     ...(isAdmin()?[{k:"category",l:"Категорія",o:[...CATS,"Сировина"],v:o.category},{k:"unit",l:"Одиниця обліку",v:o.unit},{k:"note",l:"Примітка",v:o.note}]:[]),
     {k:"reason",l:"Причина (обов'язково, якщо змінюєте кількість)"}],async x=>{await api("inventory.edit",{itemId:o.id,...x});toast("Збережено");S.bp=loadRef();go("stock")});
   const p=page(v,"Склад аптеки","inventory.list",{},d=>{D=d;return head(d)+body(d)},
-    `<button class="btn" id="b1">Операція зі складом</button>${isAdmin()?'<button class="btn ghost" id="b2">Новий предмет</button>':""}`);
+    `<button class="btn" id="b1">Операція зі складом</button>${canEd?'<button class="btn ghost" id="b3">Імпорт зі списку</button>':""}${isAdmin()?'<button class="btn ghost" id="b2">Новий предмет</button>':""}`);
   v.oninput=e=>{if(e.target.id==="fq"&&D){stF.q=e.target.value;$("#stt").innerHTML=tb(D)}};
   v.onclick=e=>{if(!D)return;const f=e.target.closest("[data-cf]"),l=e.target.closest("[data-lw]"),b=e.target.closest("#stt [data-a]");
     if(f||l){if(f)stF.c=f.dataset.cf;else stF.low=!stF.low;$("#pb").innerHTML=head(D)+body(D);return}
     if(b){const o=D.items.find(i=>i.id===b.dataset.id);if(o)edit(o)}};
   $("#b1").onclick=()=>D&&form("Операція зі складом",[{k:"type",l:"Тип",o:[["in","Надходження"],["out","Ручне списання"],["adjust","Коригування (нове значення)"]]},{k:"itemId",l:"Предмет",o:D.items.map(i=>[i.id,i.name])},{k:"qty",l:"Кількість",t:"number"},{k:"reason",l:"Причина (обов'язково)"}],async x=>{await api("inventory.move",x);toast("Збережено");loadRef();go("stock")});
   if($("#b2"))$("#b2").onclick=()=>form("Новий предмет",[{k:"name",l:"Назва"},{k:"category",l:"Категорія",o:[...CATS,"Сировина"]},{k:"unit",l:"Одиниця обліку",v:"шт"},{k:"min",l:"Мінімальний залишок",t:"number"},{k:"note",l:"Примітка"}],async x=>{await api("inventory.addItem",x);S.bp=loadRef();go("stock")});
-  p.then(d=>{if(!d)return;api("inventory.history").then(h=>{if(v.isConnected)v.insertAdjacentHTML("beforeend",`<div class="card" style="margin-top:14px"><h3>Історія руху</h3>${tbl([["time","Час"],["user","Користувач"],["item","Предмет"],["delta","Зміна"],["reason","Причина"]],h)}</div>`)}).catch(()=>{})});
+  if($("#b3"))$("#b3").onclick=()=>bulkForm();p.then(d=>{if(!d)return;api("inventory.history").then(h=>{if(v.isConnected)v.insertAdjacentHTML("beforeend",`<div class="card" style="margin-top:14px"><h3>Історія руху</h3>${tbl([["time","Час"],["user","Користувач"],["item","Предмет"],["delta","Зміна"],["reason","Причина"]],h)}</div>`)}).catch(()=>{})});
 };
 
 VIEWS.goods=v=>{
@@ -794,7 +794,7 @@ settings:b=>{const K=[["idleMinutes","Бездіяльність до відкл
 };
 VIEWS.admin=v=>{
   if(!isAdmin()){v.innerHTML='<div class="warn">Доступ заборонено</div>';return}
-  const T={over:"Огляд",users:"Користувачі",items:"Предмети",recipes:"Рецепти",logs:"Журнал",tg:"Telegram",maint:"Рестарти",settings:"Налаштування"};
+  const T={over:"Огляд",users:"Користувачі",items:"Предмети",recipes:"Рецепти",logs:"Журнал",tg:"Telegram",maint:"Рестарти",settings:"Налаштування",sheets:"Таблиці БД"};
   v.innerHTML=`<div class="chips">${Object.entries(T).map(([k,l])=>`<span class="chip ${k===AT?"on":""}" data-t="${k}">${l}</span>`).join("")}</div><div id="at"></div>`;
   v.onclick=e=>{const t=e.target.dataset.t;if(t){AT=t;VIEWS.admin(v)}};
   TABS[AT]($("#at"));
@@ -1016,6 +1016,91 @@ if(!pref&&((navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=4
 const trim=(s,n)=>document.querySelectorAll("#decor "+s).forEach((e,i)=>i>=n&&e.remove());trim(".dc",6);trim(".st",8);trim(".pt",8);
 // 3) фонове передзавантаження: не 6 запитів поспіль, а лише склад і з затримкою
 prefetch=async function(){if(!CONFIG.API_URL||S.preview)return;await new Promise(r=>setTimeout(r,3000));try{S.c["inventory.list{}"]=await api("inventory.list",{})}catch(e){}};
+})();
+/*PATCH_V2_UI*/
+(function(){
+const k0=Math.max(PAGES.findIndex(p=>p[0]==="scheme"),PAGES.findIndex(p=>p[0]==="calc"));
+PAGES.splice(k0+1,0,["plan","📋","План виробництва"]);NP.plan="craft";
+const REC=()=>RECIPES.filter(r=>!r.na&&r.ing);
+let PL={id:null,name:"",items:[]};
+
+/* розрахунок: кілька цілей → етапи, цикли, сировина (проміжні беруться зі складу) */
+function compute(items){
+  const rm=Object.fromEntries(REC().map(r=>[r.name,r])),L={},tg={};
+  items.forEach(i=>tg[i.name]=(tg[i.name]||0)+i.qty);
+  const lv=n=>{if(n in L)return L[n];L[n]=0;if(rm[n])L[n]=1+Math.max(0,...Object.keys(rm[n].ing).map(lv));return L[n]};
+  Object.keys(tg).forEach(lv);
+  const order=Object.keys(L).sort((a,b)=>L[b]-L[a]),need={...tg},cy={};
+  order.forEach(n=>{const r=rm[n];if(!r)return;let q=need[n]||0;if(!(n in tg))q=Math.max(0,q-stock(n));if(q<=0)return;
+    cy[n]=Math.ceil(q/r.yield);Object.entries(r.ing).forEach(([i,p])=>need[i]=(need[i]||0)+cy[n]*p)});
+  return{rm,L,order,need,cy,tg}}
+
+/* масовий імпорт залишків зі списку */
+window.bulkForm=()=>form("Імпорт залишків зі списку",[
+  {k:"mode",l:"Режим",o:[["set","Встановити кількість"],["add","Додати до наявного"]]},
+  {k:"list",l:"Список (кожен рядок: Назва: кількість)",t:"area"},
+  {k:"reason",l:"Причина (обов'язково)",v:"Інвентаризація"}],
+  async x=>{const rows=[],bad=[];
+    x.list.split("\n").map(s=>s.trim()).filter(Boolean).forEach(s=>{
+      const m=s.match(/^(.+?)\s*[:;\t=]\s*(-?\d+)\s*$/)||s.match(/^(.+?)\s+(\d+)\s*$/);
+      if(!m||+m[2]<0)bad.push(s);else rows.push({name:m[1].trim(),qty:+m[2]})});
+    if(bad.length)throw new Error("Не розпізнано: "+bad.slice(0,3).join(" | "));
+    if(!rows.length)throw new Error("Список порожній");
+    const r=await api("inventory.bulk",{mode:x.mode,reason:x.reason,rows});
+    toast("Змінено позицій: "+(r?.changed??rows.length));S.bp=loadRef();go("stock")});
+
+VIEWS.plan=async v=>{
+  const t=S.cur;v.onclick=null;v.oninput=null;v.onchange=null;
+  v.innerHTML=`<div class="top"><h2>План виробництва</h2></div>${noSrv()}${SK}`;
+  await ready();if(t!==S.cur)return;
+  const opts=CATS.map((c,i)=>{const l=REC().filter(r=>r.cat===i);return l.length?`<optgroup label="${esc(c)}">${l.map(r=>`<option>${esc(r.name)}</option>`).join("")}</optgroup>`:""}).join("");
+  v.innerHTML=`<div class="top"><h2>План виробництва</h2><div><button class="btn" id="pn">+ Новий план</button></div></div>${noSrv()}
+  <div class="card"><label>Назва плану</label><input id="pnm" value="${esc(PL.name)}" placeholder="Наприклад: Тиждень 41">
+  <label>Додати рецепт і кількість готової продукції</label>
+  <div class="tools"><select id="prc" style="max-width:280px">${opts}</select><input id="pqt" type="number" min="1" value="10" style="max-width:110px"><button class="btn" id="padd">Додати</button></div>
+  <div id="pit"></div>
+  <div class="acts"><button class="btn" id="psave">💾 Зберегти план</button><button class="btn ghost" id="pcp">📋 Копіювати закупівлю</button></div></div>
+  <div id="pout" style="margin-top:14px"></div>
+  <div class="card" style="margin-top:14px"><div class="ch"><h3>Збережені плани</h3></div><div id="psv">${SK}</div></div>`;
+  let PLS=[];
+  const items=()=>{$("#pit").innerHTML=PL.items.length?PL.items.map((x,i)=>`<div class="rw"><b>${esc(x.name)}</b><span><input class="pqi" type="number" min="1" value="${x.qty}" data-i="${i}" style="width:100px;display:inline-block"> <button class="btn ghost" data-rm="${i}">✕</button></span></div>`).join(""):"<p class=\"meta\" style=\"padding:8px 0\">Додайте рецепти — тут з'явиться розрахунок сировини.</p>"};
+  const out=()=>{const el=$("#pout");if(!el)return;if(!PL.items.length){el.innerHTML="";return}
+    const{rm,order,need,cy,tg}=compute(PL.items);
+    const raw=order.filter(n=>!rm[n]&&need[n]>0),st=order.slice().reverse().filter(n=>cy[n]);
+    let full=0,buy=0,unk=0,time=0;
+    const rows=raw.map(n=>{const nd=need[n],have=stock(n),def=Math.max(0,nd-have),p=S.prices[n];if(p==null)unk++;else{full+=nd*p;buy+=def*p}
+      return`<tr><td>${esc(n)}</td><td>${nd}</td><td>${have}</td><td class="${def?"bad":""}">${def}</td><td>${pin(n,p,80)}</td><td>${p==null?"—":money(nd*p)}</td><td>${p==null?"—":money(def*p)}</td></tr>`}).join("");
+    const stg=st.map(n=>{const r=rm[n],tm=cy[n]*r.time;time+=tm;
+      return`<tr><td><b>${esc(n)}</b>${n in tg?"":" "+bdg("проміжний","tl")}</td><td>${cy[n]}</td><td>${cy[n]*r.yield}</td><td>${fmtT(tm)}</td><td class="${r.skill>mySk()?"bad":""}">${r.skill}</td></tr>`}).join("");
+    let rev=0,rk=0;Object.entries(tg).forEach(([n,q])=>{const p=S.prices[n];if(p!=null){rev+=p*q;rk++}});
+    const pf=rk===Object.keys(tg).length&&!unk?rev-full:null,lock=st.filter(n=>rm[n].skill>mySk());
+    el.innerHTML=`<div class="scs">${sc("Сировина всього","🧾",money(full),unk?"без "+unk+" поз. без ціни":"повна вартість","gd")}${sc("Докупити","🛒",money(buy),"лише те, чого бракує","er")}${sc("Виручка","💵",rk?money(rev):"—","за вказаними цінами","gd")}${sc("Прибуток","📈",pf==null?"—":money(pf),"виручка − сировина",pf==null?"":pf>=0?"ok":"er")}${sc("Загальний час","⏱️",fmtT(time),st.length+" етап(ів)")}</div>
+    ${lock.length?`<div class="warn">🔒 Потрібне вище вміння (у вас ${mySk()}): ${lock.map(esc).join(", ")}</div>`:""}
+    <div class="card"><h3 style="margin-bottom:8px">Етапи виробництва</h3><div style="overflow-x:auto"><table><tr><th>Рецепт</th><th>Циклів</th><th>Вихід</th><th>Час</th><th>Вміння</th></tr>${stg}</table></div></div>
+    <div class="card" style="margin-top:14px"><h3 style="margin-bottom:8px">Потреба в сировині</h3><div style="overflow-x:auto"><table><tr><th>Сировина</th><th>Потрібно</th><th>На складі</th><th>Дефіцит</th><th>Ціна/од. $</th><th>Вартість усього</th><th>Докупити на</th></tr>${rows}</table></div>${unk?`<p class="meta" style="margin-top:8px">Ціну не вказано для ${unk} поз. — впишіть її в таблиці.</p>`:""}
+    ${Object.keys(tg).map(n=>`<div class="rw"><span>Ціна продажу «${esc(n)}» за од.</span>${pin(n,S.prices[n])}</div>`).join("")}</div>`};
+  const loadPlans=async()=>{const el=$("#psv");if(!el)return;
+    try{PLS=(await api("plan.list"))||[];el.innerHTML=tbl([["name","Назва",o=>`<b>${esc(o.name)}</b>`],["items","Склад",o=>esc(o.items.map(x=>x.name+" ×"+x.qty).join(", "))],["by","Автор"],["updated","Оновлено"],["a","",o=>ra(o.id,[["open","Відкрити"],["del","Видалити"]])]],PLS)}
+    catch(e){el.innerHTML=`<p class="meta">${esc(e.message)}</p>`}};
+  v.oninput=e=>{const T=e.target;if(T.id==="pnm")PL.name=T.value;const i=T.closest(".pqi");if(i){PL.items[+i.dataset.i].qty=Math.max(1,parseInt(i.value)||1);out()}};
+  v.onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){out();toast("Ціну збережено")}};
+  v.onclick=async e=>{const T=e.target;
+    if(T.closest("#pn")){PL={id:null,name:"",items:[]};$("#pnm").value="";items();out();return}
+    if(T.closest("#padd")){const n=$("#prc").value,q=Math.max(1,parseInt($("#pqt").value)||1),x=PL.items.find(i=>i.name===n);if(!n)return;x?x.qty+=q:PL.items.push({name:n,qty:q});items();out();return}
+    const rm=T.closest("[data-rm]");if(rm){PL.items.splice(+rm.dataset.rm,1);items();out();return}
+    if(T.closest("#psave")){if(!PL.name.trim())return toast("Вкажіть назву плану","er");if(!PL.items.length)return toast("Додайте рецепти","er");
+      try{const r=await api("plan.save",{id:PL.id,name:PL.name,items:PL.items});if(r?.id)PL.id=r.id;toast("План збережено");loadPlans()}catch(x){toast(x.message,"er")}return}
+    if(T.closest("#pcp")){const c=compute(PL.items),l=c.order.filter(n=>!c.rm[n]&&c.need[n]>stock(n)).map(n=>n+" ×"+(c.need[n]-stock(n)));
+      if(!l.length)return toast("Закупівля не потрібна — усе є на складі");
+      return navigator.clipboard.writeText("Закупівля для плану «"+(PL.name||"без назви")+"»:\n"+l.join("\n")).then(()=>toast("Скопійовано")).catch(()=>toast("Не вдалося скопіювати","er"))}
+    const b=T.closest("#psv [data-a]");if(b){const o=PLS.find(x=>x.id===b.dataset.id);if(!o)return;
+      if(b.dataset.a==="open"){PL={id:o.id,name:o.name,items:o.items.map(x=>({...x}))};$("#pnm").value=PL.name;items();out();scrollTo(0,0)}
+      else sure("Видалити план «"+o.name+"»?",async()=>{if(await act("plan.delete",{id:o.id})){if(PL.id===o.id)PL.id=null;loadPlans()}})}};
+  items();out();loadPlans();
+};
+
+/* адмін-вкладка: що робить кожен аркуш БД */
+TABS.sheets=b=>{page(b,"Таблиці бази даних","admin.sheetsInfo",{},d=>tbl([["name","Аркуш",o=>`<code>${esc(o.name)}</code>`],["desc","Призначення"],["rows","Записів",o=>o.rows<0?bdg("немає","er"):o.rows],["cols","Колонок"]],d)+`<p class="meta" style="margin-top:10px">Позначка «немає» — аркуш не створено: запустіть migrateV2 в Apps Script.</p>`,"")};
 })();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
