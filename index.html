@@ -938,6 +938,85 @@ async function mgr(){
   load();
 }
 })();
+  /* ===== ПОДАТОК + ОПТИМІЗАЦІЯ (вставити перед: /* ===== авторизація та сесія ===== *\/ ) ===== */
+(function(){
+const st=document.createElement("style");st.textContent=`
+#hd{top:var(--bh,0px)}
+#txb{position:sticky;top:0;z-index:7;height:40px;display:flex;gap:12px;align-items:center;justify-content:center;padding:0 16px;cursor:pointer;font-size:13px;white-space:nowrap;overflow:hidden;color:#1a1200}
+#txb.warn{background:linear-gradient(90deg,#ffd400,#ffb300);box-shadow:0 4px 24px rgba(255,200,0,.45)}
+#txb.crit{background:linear-gradient(90deg,#ff2d4a,#c4122d);color:#fff;box-shadow:0 4px 26px rgba(255,40,70,.6);animation:txf 1.1s ease-in-out infinite}
+#txb u{opacity:.85}
+@keyframes txf{50%{filter:brightness(1.35)}}@keyframes txp{50%{opacity:.35}}
+html.tx-warn{--ac:#ffd400;--gold:#ffd400;--ac2:#e6b800;--bd:rgba(255,212,0,.2)}
+html.tx-crit{--ac:#ff4d5e;--gold:#ff4d5e;--ac2:#d62039;--tl:#ff8a7a;--bd:rgba(255,90,105,.25)}
+html.tx-warn body{background:radial-gradient(900px 500px at 85% -5%,rgba(255,200,0,.22),transparent 60%),linear-gradient(170deg,#1e1806,#130f03 60%,#171204)}
+html.tx-crit body{background:radial-gradient(900px 500px at 85% -5%,rgba(255,50,75,.3),transparent 60%),linear-gradient(170deg,#260b11,#14060a 60%,#1b080d)}
+html.tx-warn nav{background:linear-gradient(180deg,#2a2208,#1a1505)}html.tx-crit nav{background:linear-gradient(180deg,#2e0d15,#1a080d)}
+html.tx-warn .btn:not(.ghost),html.tx-warn .chip.on,html.tx-warn .seg button.on,html.tx-warn .av{background:linear-gradient(135deg,#ffe65c,#ffc400);color:#2a1d00}
+html.tx-crit .btn:not(.ghost),html.tx-crit .chip.on,html.tx-crit .seg button.on,html.tx-crit .av{background:linear-gradient(135deg,#ff8591,#e5283d);color:#fff}
+html.tx-crit body::after,html.tx-warn body::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:70}
+html.tx-crit body::after{box-shadow:inset 0 0 140px rgba(255,40,60,.4);animation:txp 2s ease-in-out infinite}
+html.tx-warn body::after{box-shadow:inset 0 0 110px rgba(255,200,0,.18)}
+html.tx-warn nav a[data-p=tax]::after,html.tx-crit nav a[data-p=tax]::after{content:"!";margin-left:auto;width:18px;height:18px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:12px;background:var(--ac);color:#1a0a00}
+.txr{display:flex;gap:26px;align-items:center;flex-wrap:wrap}
+.txr svg{width:130px;flex:none}.txr .dd{display:flex;gap:6px;margin-top:10px}
+.txr .dd i{width:34px;height:10px;border-radius:6px;background:rgba(255,255,255,.1)}
+.txr .dd i.a{background:var(--ok)}.txr .dd i.w{background:#ffd400;box-shadow:0 0 10px #ffd400}.txr .dd i.c{background:#ff4d5e;box-shadow:0 0 10px #ff4d5e}
+`;document.head.append(st);
+PAGES.splice(PAGES.findIndex(p=>p[0]==="bank")+1,0,["tax","🧾","Податок"]);
+
+const H=document.documentElement,TX={st:null},WARN=5,CRIT=6,WEEK=7;
+const fdt=ms=>new Intl.DateTimeFormat("uk-UA",{timeZone:"Europe/Kyiv",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(ms));
+const nowMs=()=>TX.st?TX.st.now+(Date.now()-TX.st.t):Date.now();
+const info=s=>{if(!s||!s.last)return{lv:"none",day:0};const day=Math.floor((nowMs()-s.last.paidAt)/864e5)+1;return{day,lv:day>=CRIT?"crit":day>=WARN?"warn":"ok"}};
+function apply(){
+  const i=info(TX.st);H.classList.toggle("tx-warn",i.lv==="warn");H.classList.toggle("tx-crit",i.lv==="crit");
+  let b=document.getElementById("txb");
+  if(i.lv!=="warn"&&i.lv!=="crit"){if(b)b.remove();H.style.setProperty("--bh","0px");return}
+  if(!b){b=document.createElement("div");b.id="txb";$("#wrap").prepend(b);b.onclick=()=>go("tax")}
+  b.className=i.lv;
+  b.innerHTML=`<span>${i.lv==="crit"?"🚨":"⚠️"}</span><b>${i.lv==="crit"?"ТЕРМІНОВО: податок на бізнес не сплачено!":"Час сплатити податок на бізнес"}</b><span>День ${i.day} з ${WEEK} · останній платіж ${fdt(TX.st.last.paidAt)}</span><u>Відкрити →</u>`;
+  H.style.setProperty("--bh","40px");
+}
+async function refresh(){if(!CONFIG.API_URL||S.preview||!S.token)return;try{const d=await api("tax.status");if(d){TX.st={...d,t:Date.now()};apply()}}catch(e){}}
+const _sa=showApp;showApp=function(){_sa();refresh()};
+setInterval(()=>{if(!S.user||document.hidden)return;S.preview?apply():refresh()},60000);
+
+VIEWS.tax=v=>{
+  const can=!S.preview&&(isAdmin()||(S.user?.perms||"").split(",").includes("bank"));
+  const body=d=>{TX.st={...d.status,t:Date.now()};apply();const s=TX.st,i=info(s),L=s.last,
+    col=i.lv==="crit"?"var(--er)":i.lv==="warn"?"var(--wr)":"var(--ok)",R=52,C=2*Math.PI*R,pr=Math.min(1,i.day/WEEK),
+    lbl={ok:"Все гаразд",warn:"Час платити",crit:"ТЕРМІНОВО",none:"Немає платежів"}[i.lv];
+    const dots=[...Array(WEEK)].map((_,k)=>`<i class="${k+1>i.day?"":k+1>=CRIT?"c":k+1===WARN?"w":"a"}"></i>`).join("");
+    return`<div class="card txr"><svg viewBox="0 0 130 130"><circle cx="65" cy="65" r="${R}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="11"/><circle cx="65" cy="65" r="${R}" fill="none" stroke="${col}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pr)}" transform="rotate(-90 65 65)" style="filter:drop-shadow(0 0 8px ${col})"/><text x="65" y="72" text-anchor="middle" fill="${col}" font-size="30" font-weight="800">${i.day||"—"}</text><text x="65" y="92" text-anchor="middle" fill="#8ea6b5" font-size="10">день з ${WEEK}</text></svg>
+    <div><h2 style="color:${col}">${lbl}</h2><p class="meta">Податок платиться раз на тиждень. З ${WARN}-го дня — жовте попередження й повідомлення в Telegram, з ${CRIT}-го — червона тривога.</p><div class="dd">${dots}</div></div></div>
+    <div class="scs" style="margin-top:14px">${sc("Останній платіж","📅",L?fdt(L.paidAt):"—",L?"Київ":"ще не було")}${sc("Сплатив","👤",L?esc(L.payer):"—",L&&L.by!==L.payer?"вніс "+esc(L.by):"")}${sc("Сума","💰",L?money(L.amount):"—","останній платіж","gd")}${sc("Наступний до","⏳",L?fdt(L.paidAt+WEEK*864e5):"—","дедлайн",i.lv==="crit"?"er":"")}</div>
+    <div class="card"><div class="ch"><h3>Історія платежів</h3></div>${tbl([["paidAt","Дата й час",o=>fdt(o.paidAt)],["payer","Хто сплатив"],["amount","Сума",o=>`<b class="gd">${money(o.amount)}</b>`],["by","Вніс"],["note","Примітка"],["a","",o=>isAdmin()&&!S.preview?ra(o.id,[["del","✕"]]):""]],d.rows)}</div>
+    ${S.preview?`<div class="note" style="margin-top:14px">Демо дизайну: ${[["Все гаразд",2],["Жовтий (5 день)",5],["Червоний (6 день)",6]].map(([t,n])=>`<span class="chip" data-demo="${n}">${t}</span>`).join(" ")}</div>`:""}`};
+  const demo=n=>({status:{now:Date.now(),last:{paidAt:Date.now()-(n-1)*864e5-6e4,payer:"Демо",by:"Демо",amount:500}},rows:[]});
+  const pay=()=>form("Відмітити оплату податку",[{k:"paidAt",l:"Дата й час оплати",t:"datetime-local",v:new Date(Date.now()-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,16)},{k:"amount",l:"Сума ($)",t:"number"},{k:"payer",l:"Хто сплатив",v:S.user?.name||""},{k:"note",l:"Примітка"}],async x=>{
+    if(!x.paidAt)throw new Error("Вкажіть дату й час");
+    await api("tax.pay",{paidAt:new Date(x.paidAt).getTime(),amount:x.amount,payer:x.payer,note:x.note});S.c={};await refresh();toast("Оплату записано, повідомлення в Telegram надіслано");go("tax")});
+  if(S.preview){v.innerHTML=`<div class="top"><h2>Податок</h2></div>${body(demo(+(TX.dn||2)))}`;
+    v.onclick=e=>{const n=e.target.closest("[data-demo]")?.dataset.demo;if(n){TX.dn=n;VIEWS.tax(v)}};return}
+  page(v,"Податок на бізнес","tax.list",{},body,can?'<button class="btn" id="b1">🧾 Відмітити оплату</button>':"",true);
+  if(can)$("#b1").onclick=pay;
+  v.onclick=async e=>{const b=e.target.closest("[data-a]");if(b&&await act("tax.delete",{id:b.dataset.id})){S.c={};await refresh();go("tax")}};
+};
+
+/* ===== ОПТИМІЗАЦІЯ ===== */
+// 1) однакові запити-читання, що летять одночасно, виконуються один раз
+const _api=api,fl={};
+api=function(a,d={}){
+  if(!/\.list$|^(boot|dashboard|admin\.users|admin\.items|admin\.recipes|inventory\.history)$/.test(a))return _api(a,d);
+  const k=a+JSON.stringify(d);return fl[k]||(fl[k]=_api(a,d).finally(()=>delete fl[k]))};
+// 2) менше важких анімацій; на слабких пристроях — автоматично «полегшений» режим
+let pref=null;try{pref=localStorage.getItem("fx")}catch(e){}
+if(!pref&&((navigator.hardwareConcurrency||8)<=4||(navigator.deviceMemory||8)<=4))H.classList.add("lite");
+const trim=(s,n)=>document.querySelectorAll("#decor "+s).forEach((e,i)=>i>=n&&e.remove());trim(".dc",6);trim(".st",8);trim(".pt",8);
+// 3) фонове передзавантаження: не 6 запитів поспіль, а лише склад і з затримкою
+prefetch=async function(){if(!CONFIG.API_URL||S.preview)return;await new Promise(r=>setTimeout(r,3000));try{S.c["inventory.list{}"]=await api("inventory.list",{})}catch(e){}};
+})();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
 function endSession(msg){sfx("sys");
