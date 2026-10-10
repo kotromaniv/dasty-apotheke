@@ -1521,31 +1521,22 @@ function startPoll(){
   clearInterval(S.poll);
   if(!CONFIG.API_URL || S.preview) return;
 
-  S.poll = setInterval(()=>{
-    if(document.hidden || S.busy) return;
+  S.poll = setInterval(() => {
+    if (document.hidden || S.busy) return;
     const a = S.act;
     S.act = false;
 
-    api("ping",{active:a}).then(r=>{
-      if(!r) return;
+    api("ping", {active: a}).then(r => {
+      if (!r) return;
 
-      if(r.idleIn != null){
-        if(r.idleIn < 60 && !S.warned){
+      // --- Idle попередження ---
+      if (r.idleIn != null) {
+        if (r.idleIn < 60 && !S.warned) {
           S.warned = 1;
-          toast("Сесія завершиться через "+r.idleIn+" с без активності","er");
-        } else if(r.idleIn >= 60){
+          toast("Сесія завершиться через " + r.idleIn + " с без активності", "er");
+        } else if (r.idleIn >= 60) {
           S.warned = 0;
         }
-      }
-
-      if(r.sync && r.sync.theme){
-        const cur = document.documentElement.dataset.theme || "default";
-        if(r.sync.theme !== cur){
-          document.documentElement.dataset.theme = r.sync.theme;
-        }
-      }
-    }).catch(()=>{});
-  }, CONFIG.POLL_MS);
       }
 
       // --- Застосування теми та банера з сервера ---
