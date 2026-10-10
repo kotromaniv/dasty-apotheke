@@ -1554,7 +1554,28 @@ function startPoll(){
     }).catch(() => {});
   }, CONFIG.POLL_MS);
 }
-
+async function login(){
+  const lg = $("#lg").value.trim();
+  const pw = $("#pw").value;
+  if(!lg || !pw){
+    $("#lerr").textContent = "Введіть логін і пароль";
+    return;
+  }
+  $("#lbtn").disabled = true;
+  $("#lerr").textContent = "";
+  try{
+    const r = await api("login", {login: lg, password: pw});
+    S.token = r.token;
+    S.user = r.user;
+    try{ sessionStorage.setItem("tk", r.token) }catch(e){}
+    showApp();
+  }catch(e){
+    $("#lerr").textContent = e.message || "Помилка входу";
+    try{ sfx("er") }catch(err){}
+  }finally{
+    $("#lbtn").disabled = false;
+  }
+}
 $("#lbtn").onclick=login;$("#pw").onkeydown=e=>{if(e.key==="Enter")login()};
 if(!CONFIG.API_URL){$("#prev").classList.remove("hide");$("#prev").onclick=()=>{S.preview=true;S.user={name:"Режим перегляду",role:"admin"};showApp()}}
 else if(S.token)api("me").then(u=>{if(!u)return;S.user=u;showApp()}).catch(()=>{});
