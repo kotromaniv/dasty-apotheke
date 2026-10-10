@@ -236,7 +236,7 @@ input[type=range]{padding:0;accent-color:var(--ac)}
 <div id="toast"></div>
 <script>
 /* ===== CONFIG ===== */
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbyqKrTdVAPv-iVEmSsTMlcVU6d1Arafq5fHHkxmDIT7aaxvMC17Or0LROWTyU-69OY20Q/exec",POLL_MS:4000,CAPACITY:3500};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbzw7M29pUSxmC3Uss1v-Np-ZSIKWpqE-kslWeFzcO-bo_4BIR-1TXPaCU3oUhe9lCnTug/exec",POLL_MS:4000,CAPACITY:3500};
 
 /* ===== api: повтори (той самий requestId → без дублів) ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false,c:{},cur:{}};
@@ -1517,15 +1517,42 @@ function endSession(msg){sfx("sys");
   clearInterval(S.poll);$("#app").classList.add("hide");$("#login").classList.remove("hide");
   $("#lerr").textContent=msg||"Сесію завершено. Потрібно перепідключитися. Всі підтверджені дії збережені.";
 }
-function startPoll(){clearInterval(S.poll);if(!CONFIG.API_URL||S.preview)return;S.poll=setInterval(()=>{if(document.hidden||S.busy)return;const a=S.act;S.act=false;api("ping",{active:a}).then(r=>{if(r&&r.idleIn!=null){if(r.idleIn<60&&!S.warned){S.warned=1;toast("Сесія завершиться через "+r.idleIn+" с без активності","er")}else if(r.idleIn>=60)S.warned=0}}).catch(()=>{})},CONFIG.POLL_MS)}
-async function login(){
-  const b=$("#lbtn");$("#lerr").textContent="";
-  if(!$("#lg").value||!$("#pw").value){$("#lerr").textContent="Введіть логін і пароль";return}
-  b.disabled=true;b.innerHTML='<span class="spin"></span>Вхід…';
-  try{const d=await api("login",{login:$("#lg").value,password:$("#pw").value});
-    S.token=d.token;S.user=d.user;try{sessionStorage.setItem("tk",d.token)}catch(e){}$("#pw").value="";showApp()}
-  catch(e){$("#lerr").textContent=e.message;const lb=document.querySelector(".lbox");lb.classList.remove("shake");void lb.offsetWidth;lb.classList.add("shake")}
-  b.disabled=false;b.textContent="Увійти";
+function startPoll(){
+  clearInterval(S.poll);
+  if(!CONFIG.API_URL || S.preview) return;
+
+  S.poll = setInterval(() => {
+    if (document.hidden || S.busy) return;
+    const a = S.act;
+    S.act = false;
+
+    api("ping", {active: a}).then(r => {
+      if (!r) return;
+
+      // --- Idle попередження ---
+      if (r.idleIn != null) {
+        if (r.idleIn < 60 && !S.warned) {
+          S.warned = 1;
+          toast("Сесія завершиться через " + r.idleIn + " с без активності", "er");
+        } else if (r.idleIn >= 60) {
+          S.warned = 0;
+        }
+      }
+
+      // --- Застосування теми та банера з сервера ---
+      if (r.sync) {
+        // Тема
+        if (r.sync.theme && r.sync.theme !== document.documentElement.dataset.theme) {
+          document.documentElement.dataset.theme = r.sync.theme;
+        }
+
+        // Банер (якщо є)
+        if (typeof applyBanner === "function") {
+          applyBanner(r.sync);
+        }
+      }
+    }).catch(() => {});
+  }, CONFIG.POLL_MS);
 }
 
 $("#lbtn").onclick=login;$("#pw").onkeydown=e=>{if(e.key==="Enter")login()};
