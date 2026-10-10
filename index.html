@@ -1529,7 +1529,6 @@ function startPoll(){
     api("ping",{active:a}).then(r=>{
       if(!r) return;
 
-      // Idle
       if(r.idleIn != null){
         if(r.idleIn < 60 && !S.warned){
           S.warned = 1;
@@ -1539,7 +1538,6 @@ function startPoll(){
         }
       }
 
-      // Тема з сервера
       if(r.sync && r.sync.theme){
         const cur = document.documentElement.dataset.theme || "default";
         if(r.sync.theme !== cur){
@@ -1548,7 +1546,7 @@ function startPoll(){
       }
     }).catch(()=>{});
   }, CONFIG.POLL_MS);
-}
+      }
 
       // --- Застосування теми та банера з сервера ---
       if (r.sync) {
