@@ -236,7 +236,7 @@ input[type=range]{padding:0;accent-color:var(--ac)}
 <div id="toast"></div>
 <script>
 /* ===== CONFIG ===== */
-const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbyhRoTNwVPU2uIMaGcht1FS9Q46iUJwDoAxnxBbjx02t8qBpmPr30y9UdGuicEoabl2wQ/exec",POLL_MS:4000,CAPACITY:3500};
+const CONFIG={API_URL:"https://script.google.com/macros/s/AKfycbykR6jcE8mPpTPzjzuw9OQd27Myb8H9X8Y4Vo2Ek1r3yGZHif5i8IbZ7V9iAzGNj0ZR6Q/exec",POLL_MS:4000,CAPACITY:3500};
 
 /* ===== api: повтори (той самий requestId → без дублів) ===== */
 const S={user:null,token:null,inv:{},prices:{},preview:false,c:{},cur:{}};
@@ -1509,6 +1509,361 @@ async function list(b){const el=b.querySelector("#tsl");if(!el)return;
   try{const L=await api("admin.themeScheduleList");if(!el.isConnected)return;
     el.innerHTML=tbl([["theme","Тема",o=>"<b>"+esc(THN[o.theme]||o.theme)+"</b>"],["when","Запуск (Київ)"],["status","Статус",o=>o.status==="scheduled"?bdg("Очікує","wr"):o.status==="done"?bdg("Виконано","ok"):bdg("Скасовано","mu")],["by","Хто запланував"],["a","",o=>o.status==="scheduled"?'<button class="btn ghost" data-tsc="'+esc(o.id)+'">Скасувати</button>':""]],L)}
   catch(e){if(el.isConnected)el.innerHTML='<p class="meta">'+esc(e.message)+"</p>"}}
+})();
+  /*PATCH_PRICING_UI*/
+/* ====================================================================
+   ПАТЧ «ЦІНИ ТА РИНОК» — вставити в index.html ПЕРЕД рядком
+   /* ===== авторизація та сесія ===== *\/
+   Він: додає сторінку «Ціни та ринок» (мін/макс/середні, націнка, порадник),
+   вбудовує рекомендації в Товари / Крафт / Підрахунок / План / Склад,
+   прибирає вкладки Банк, Скупка, Замовлення трав і перебудовує меню.
+   ==================================================================== */
+(function(){
+"use strict";
+const DAY=864e5;
+const fm=n=>n==null||!isFinite(n)?"—":money(n),
+  r2=x=>Math.round(x*100)/100,
+  pc=n=>n==null||!isFinite(n)?"—":(n>=0?"+":"−")+Math.abs(n).toFixed(1)+"%",
+  n2=n=>n==null||!isFinite(n)?"—":(+n).toFixed(2);
+
+/* ---------- стилі ---------- */
+const st=document.createElement("style");st.textContent=`
+.advx{margin:8px 0;padding:10px 12px;border-radius:12px;background:rgba(247,183,51,.07);border:1px solid rgba(247,183,51,.28);font-size:12.5px;line-height:1.6}
+.advx .ok-t{color:var(--ok)}.advx .wr-t,.wrc{color:var(--wr)}.advx .mu-t{color:var(--mu)}
+.fp{cursor:pointer;border:1px solid rgba(247,183,51,.5);background:rgba(247,183,51,.12);color:var(--ac);border-radius:99px;padding:1px 10px;font-weight:700;font-size:12px}
+.fp:hover{background:rgba(247,183,51,.25)}
+.mkn{white-space:nowrap;font-variant-numeric:tabular-nums}
+details.card summary{cursor:pointer;font-weight:700}
+details.card p{margin:8px 0 0;color:var(--mu);font-size:12.5px;line-height:1.6}
+.rgb{position:relative;height:104px;margin:8px 18px}
+.rgb::before{content:"";position:absolute;left:0;right:0;top:50px;height:4px;border-radius:4px;background:linear-gradient(90deg,rgba(47,217,187,.5),rgba(247,183,51,.5))}
+.rgm{position:absolute;top:0;height:104px;width:0}
+.rgm::after{content:"";position:absolute;left:-6px;top:46px;width:12px;height:12px;border-radius:50%;background:var(--ac);border:2px solid #0d2133}
+.rgm.cost::after{background:var(--er)}.rgm.rec::after{background:var(--ok)}.rgm.cur::after{background:#fff}.rgm.mn::after,.rgm.mx::after{background:var(--tl)}
+.rgm em{position:absolute;left:0;transform:translateX(-50%);white-space:nowrap;font-style:normal;font-size:11px;text-align:center;line-height:1.25}
+.rgm.up em{bottom:60px}.rgm.dn em{top:60px}
+.rgm em b{display:block;color:var(--tx)}.rgm em small{color:var(--mu)}
+.spk{width:100%;height:54px;display:block}
+.nt{padding:3px 0;font-size:12.5px}
+`;document.head.append(st);
+
+/* ---------- дані ---------- */
+const PM=()=>S.pm||(S.pm={items:{},set:{target:30,floor:8},nb:0,ns:0});
+const cfgT=()=>{const s=PM().set||{};return{t:(+s.target>=0?+s.target:30)/100,f:(+s.floor>=0?+s.floor:8)/100}};
+const stat=n=>PM().items[n]||{};
+const recipeMap=()=>{const m={};RECIPES.forEach(r=>{if(!r.na&&r.ing)m[r.name]=r});return m};
+const baseBuy=n=>{const b=stat(n).b;return b?(b.wavg||b.avg):(S.prices[n]>0?+S.prices[n]:null)};
+
+/* собівартість за рецептами; сировина — за свіжою ціною закупівлі */
+function costOf(name,rm){
+  const unk=new Set(),memo={};
+  const f=(n,g)=>{
+    if(n in memo)return memo[n];
+    const r=rm[n];
+    if(!r||g.indexOf(n)>=0){const p=baseBuy(n);if(p==null)unk.add(n);return memo[n]=p||0}
+    let s=0;for(const k in r.ing)s+=f(k,g.concat(n))*r.ing[k];
+    return memo[n]=s/r.yield};
+  const c=f(name,[]);
+  return{cost:c,complete:!unk.size,unknown:[...unk]};
+}
+
+/* ---------- РУШІЙ РЕКОМЕНДАЦІЙ ----------
+   Рекомендована ціна продажу = суміш «ринку» (свіжа середня з угод) та
+   «собівартість + цільова націнка»; з 3 угод ринок бере верх, собівартість лишається нижньою межею.
+   Далі корекція за запасом/швидкістю продажів; не нижче мін. націнки. */
+function advise(name,rm){
+  rm=rm||recipeMap();
+  const st=stat(name),s=st.s,b=st.b,{t,f}=cfgT(),r=rm[name],NOW=Date.now();
+  const cc=r?costOf(name,rm):null,C=cc&&cc.cost>0?cc.cost:null;
+  const cur=S.prices[name]>0?+S.prices[name]:null,sk=stock(name);
+  const a={name,s,b,cur,sk,v:st.v||0,cost:C,complete:!!cc&&cc.complete,unknown:cc?cc.unknown:[],isProd:!!r||!!s,notes:[],rec:null,buyRec:null,conf:null};
+  if(C){
+    a.notes.push(["i","Собівартість "+fm(C)+(a.complete?"":" (неповна — немає цін для: "+a.unknown.slice(0,4).join(", ")+")")+". Ціль +"+Math.round(t*100)+"% → "+fm(C*(1+t))+"; мінімум +"+Math.round(f*100)+"% → "+fm(C*(1+f))+"."]);
+  }
+  if(a.isProd){
+    const floor=C?C*(1+f):0,plus=C?C*(1+t):null,mk=s?(s.wavg||s.avg):null;
+    let base=null;
+    if(mk!=null&&plus!=null){const w=Math.min(1,s.n/3);base=mk*w+plus*(1-w)}else base=mk!=null?mk:plus;
+    if(s)a.notes.push(["i","Продавалось: мін "+fm(s.min)+" · середня "+fm(s.avg)+" (свіжа "+fm(s.wavg)+") · макс "+fm(s.max)+" — "+s.n+" угод."]);
+    else if(C)a.notes.push(["wr","Продажів ще не записано — рекомендація лише від собівартості."]);
+    if(base!=null){
+      let adj=0;
+      if(s&&a.v>0){const cover=sk/a.v;
+        if(cover>14){adj=-Math.min(.1,(cover-14)/140);a.notes.push(["wr","Запас "+sk+" шт ≈ "+Math.round(cover)+" дн. продажів — трохи знижую ціну."])}
+        else if(sk>0&&cover<3){adj=.05;a.notes.push(["ok","Запасу на ~"+Math.max(1,Math.round(cover))+" дн. — попит вищий за пропозицію, можна підняти."])}}
+      else if(s&&sk>0&&NOW-s.lt>14*DAY){adj=-.05;a.notes.push(["wr","Немає продажів понад 14 днів, на складі "+sk+" шт — знижую для швидшого збуту."])}
+      let fair=base*(1+adj);
+      if(s&&s.n>=3)fair=Math.min(fair,Math.max(s.max*1.05,floor));
+      fair=Math.max(fair,floor);
+      const fast=Math.max(floor,fair*.92),top=Math.max(fair,s&&s.max>fair?Math.min(s.max,fair*1.25):fair*1.12);
+      a.rec={fast:r2(fast),fair:r2(fair),top:r2(top),floor:r2(floor)};
+      a.recMk=C?(fair/C-1)*100:null;
+      const n=s?s.n:0;
+      a.conf=n>=8&&C&&a.complete?["Висока","ok"]:(n>=3||(C&&a.complete))?["Середня","wr"]:["Низька","mu"];
+    }
+  }
+  if(b){
+    const fb=b.wavg||b.avg;
+    a.buyRec={good:r2((b.min+fb)/2),fair:r2(fb),cap:r2(Math.max(fb,Math.min(b.max,fb*1.1)))};
+    if(b.n>=3&&b.last>fb*1.15)a.notes.push(["wr","Остання закупівля "+fm(b.last)+" на "+Math.round((b.last/fb-1)*100)+"% дорожча за звичайну ("+fm(fb)+")."]);
+    else a.notes.push(["i","Закупівля: мін "+fm(b.min)+" · середня "+fm(b.avg)+" · макс "+fm(b.max)+" — "+b.n+" угод. Вигідно ≤ "+fm(a.buyRec.good)+", не дорожче "+fm(a.buyRec.cap)+"."]);
+  }
+  a.mkCur=C&&cur!=null?(cur/C-1)*100:null;
+  a.mkSell=C&&s?(s.avg/C-1)*100:null;
+  a.mkTrade=b&&s?(s.avg/b.avg-1)*100:null;
+  a.status=!a.rec?"nodata":cur==null?"noprice":(C&&cur<C)?"loss":cur<a.rec.fair*.85?"low":cur>Math.max(a.rec.top*1.1,a.rec.fair*1.25)?"high":"ok";
+  return a;
+}
+
+/* порадник: перелік того, що варто виправити */
+function tips(L){
+  const T=[],NOW=Date.now();
+  L.forEach(a=>{
+    if(a.isProd){
+      if(a.cur!=null&&a.cost&&a.cur<a.cost)T.push({sev:3,i:"⛔",name:a.name,t:"Продаж у мінус: ваша ціна "+fm(a.cur)+" < собівартості "+fm(a.cost)+".",fix:a.rec?a.rec.fair:null});
+      else if(a.rec&&a.cur!=null&&a.cur<a.rec.fair*.85)T.push({sev:2,i:"📉",name:a.name,t:"Ціна занижена: "+fm(a.cur)+", розрахунок/ринок дає ≈ "+fm(a.rec.fair)+" (+"+((a.rec.fair/a.cur-1)*100).toFixed(0)+"%).",fix:a.rec.fair});
+      else if(a.s&&a.rec&&a.cur!=null&&a.cur>Math.max(a.s.max*1.1,a.rec.fair*1.25))T.push({sev:1,i:"📈",name:a.name,t:"Ціна "+fm(a.cur)+" вища за все, що продавалось (макс "+fm(a.s.max)+") — може не піти.",fix:a.rec.fair});
+      if(a.rec&&a.s&&a.sk>0&&NOW-a.s.lt>14*DAY)T.push({sev:1,i:"🕸️",name:a.name,t:"Застій: немає продажів 14+ днів, на складі "+a.sk+" шт.",fix:a.rec.fast});
+      if(a.unknown.length&&(a.sk>0||a.s))T.push({sev:1,i:"🧩",name:a.name,t:"Собівартість неповна — немає ціни для: "+a.unknown.slice(0,3).join(", ")+"."});
+      if(a.rec&&a.cur==null&&(a.sk>0||a.s))T.push({sev:1,i:"🏷️",name:a.name,t:"Ціну не задано. Рекомендація: "+fm(a.rec.fair)+".",fix:a.rec.fair});
+    }
+    if(a.b&&a.b.n>=3&&a.b.last>(a.b.wavg||a.b.avg)*1.15)T.push({sev:2,i:"💸",name:a.name,t:"Переплата: остання закупівля "+fm(a.b.last)+", звичайно ≈ "+fm(a.b.wavg||a.b.avg)+"."});
+  });
+  return T.sort((x,y)=>y.sev-x.sev);
+}
+
+/* блок порад (для форм, Крафту, Підрахунку) */
+function adviceHtml(a,attr){
+  const bt=v=>`<button type="button" class="fp" ${attr}="${v}" data-n="${esc(a.name)}">${fm(v)}</button>`;
+  let h="";
+  if(a.rec)h+=`<div>💡 <b>Рекомендація</b>${a.conf?` <span class="${a.conf[1]}-t">(довіра: ${a.conf[0].toLowerCase()})</span>`:""}: швидко ${bt(a.rec.fast)} · оптимально ${bt(a.rec.fair)} · макс ${bt(a.rec.top)}${a.recMk!=null?" · націнка "+pc(a.recMk):""}</div>`;
+  else if(a.buyRec)h+=`<div>💡 Закупівля: вигідно ≤ <b>${fm(a.buyRec.good)}</b>, не дорожче <b>${fm(a.buyRec.cap)}</b></div>`;
+  else h+=`<div>💡 Недостатньо даних. Запишіть угоди на сторінці «Ціни та ринок» або вкажіть ціни сировини.</div>`;
+  const sm=[];
+  if(a.cost)sm.push("собівартість "+fm(a.cost)+(a.complete?"":"*"));
+  if(a.s)sm.push("продавалось "+n2(a.s.min)+" / "+n2(a.s.avg)+" / "+n2(a.s.max)+" ("+a.s.n+" угод)");
+  if(sm.length)h+=`<div class="meta">${sm.join(" · ")}</div>`;
+  if(a.cost&&!a.complete)h+=`<div class="meta">* без ціни: ${a.unknown.slice(0,4).map(esc).join(", ")}</div>`;
+  return h;
+}
+
+/* ---------- сторінка «Ціни та ринок» ---------- */
+const UI={q:"",f:"all"};
+const FL=[["all","Усі"],["prod","Продукція"],["raw","Сировина"],["trade","Є угоди"],["att","Потребує уваги"]];
+const ST={nodata:["Немає даних","mu"],noprice:["Без ціни","wr"],loss:["Збиток","er"],low:["Занижена","wr"],high:["Завищена","wr"],ok:["Норма","ok"]};
+let LAST=[];
+
+function model(){
+  const rm=recipeMap(),set=new Set(allNames());
+  Object.keys(PM().items).forEach(n=>set.add(n));
+  return[...set].sort((a,b)=>a.localeCompare(b,"uk")).map(n=>advise(n,rm));
+}
+const pass=(a,k)=>k==="all"||(k==="prod"&&a.isProd)||(k==="raw"&&!a.isProd)||(k==="trade"&&(a.s||a.b))||(k==="att"&&(a.status==="loss"||a.status==="low"||a.status==="high"));
+
+function tableHtml(L){
+  const q=UI.q.trim().toLowerCase(),f=cfgT().f*100;
+  const l=L.filter(a=>pass(a,UI.f)&&(!q||a.name.toLowerCase().includes(q)));
+  if(!l.length)return'<p class="meta" style="padding:10px 0">Нічого не знайдено.</p>';
+  const mm=(x,u)=>x?`<span class="mkn">${n2(x.min)} / <b>${n2(x.avg)}</b> / ${n2(x.max)}</span><br><small class="meta">${x.n} уг.</small>`:"—";
+  return`<div style="overflow-x:auto"><table><tr><th>Предмет</th><th>Купівля $<br>мін / сер / макс</th><th>Продаж $<br>мін / сер / макс</th><th>Собівартість</th><th>Ваша ціна $</th><th>Націнка</th><th>Рекомендація</th><th>Статус</th><th></th></tr>${l.map(a=>{
+    const mk=a.mkCur!=null?[a.mkCur,""]:a.mkTrade!=null?[a.mkTrade,"торг."]:null;
+    const mc=mk?(mk[0]<0?"er":mk[0]<f?"wrc":"ok"):"";
+    const rec=a.rec?`<b class="gd">${fm(a.rec.fair)}</b> <span class="${a.conf[1]}-t advx" style="border:0;background:none;padding:0;margin:0">●</span><br><small class="meta">${n2(a.rec.fast)} – ${n2(a.rec.top)}</small>`:a.buyRec?`<small>куп. ≤ <b>${fm(a.buyRec.cap)}</b></small>`:"—";
+    const s=ST[a.status];
+    return`<tr><td><b>${esc(a.name)}</b><br><small class="meta">${a.isProd?"продукція":"сировина"}${a.sk?" · склад "+a.sk:""}</small></td><td>${mm(a.b)}</td><td>${mm(a.s)}</td><td class="mkn">${a.cost?fm(a.cost)+(a.complete?"":"*"):"—"}</td><td>${pin(a.name,a.cur,78)}</td><td>${mk?`<b class="${mc}">${pc(mk[0])}</b>${mk[1]?` <small class="meta">${mk[1]}</small>`:""}`:"—"}</td><td>${rec}</td><td>${bdg(s[0],s[1])}</td><td><button class="btn ghost" data-det="${esc(a.name)}">Деталі</button></td></tr>`}).join("")}</table></div><p class="meta" style="margin-top:8px">* собівартість неповна — не для всієї сировини є ціна. «Ваша ціна» — та, що йде в Крафт, Підрахунок і План; її можна змінити тут.</p>`;
+}
+function tipsHtml(T){
+  if(!T.length)return`<div class="card" style="margin-bottom:14px"><div class="ch"><h3>💡 Порадник цін</h3></div><p class="meta">Критичного немає, або даних ще замало. Записуйте угоди — і порадник почне підказувати, де ціна занижена, завищена чи збиткова.</p></div>`;
+  return`<div class="card" style="margin-bottom:14px"><div class="ch"><h3>💡 Порадник цін</h3><span class="bdg gd">підказок: ${T.length}</span></div>${T.slice(0,8).map(x=>`<div class="rw"><div><b>${x.i} ${esc(x.name)}</b><small>${esc(x.t)}</small></div><span class="ra" style="margin:0">${x.fix!=null?`<button class="btn ghost" data-fix="${esc(x.name)}" data-p="${x.fix}">Застосувати ${fm(x.fix)}</button>`:""}<button class="btn ghost" data-det="${esc(x.name)}">Деталі</button></span></div>`).join("")}${T.length>8?`<p class="meta" style="padding-top:8px">…і ще ${T.length-8}. Відфільтруйте таблицю за «Потребує уваги».</p>`:""}</div>`;
+}
+function shell(){
+  $("#mkb").innerHTML=`<div id="mk1"></div><div id="mk2"></div><div class="tools"><input id="mq" placeholder="🔍 Пошук предмета…" value="${esc(UI.q)}"></div><div class="chips" id="mc"></div><div class="card" id="mk4"></div>
+  <details class="card" style="margin-top:14px"><summary>Як рахує порадник цін</summary>
+  <p><b>Мін / сер / макс</b> беруться з журналу угод. Середня «свіжа» дає угодам старше тижня вдвічі менше ваги — ціни рухаються, і порадник за ними встигає.</p>
+  <p><b>Націнка</b> = ціна ÷ собівартість − 1. Собівартість рахується за рецептами від свіжих цін закупівлі сировини, включно з проміжними етапами.</p>
+  <p><b>Рекомендована ціна</b> — орієнтується на ринок (свіжа середня з угод); поки угод менше трьох, підмішується «собівартість + цільова націнка». Нижче мінімальної націнки не опускається. Далі корекція: великий запас і мало продажів → дешевше, мало запасу і швидкі продажі → дорожче. Ніколи нижче мінімальної націнки.</p>
+  <p><b>Звідки беруться угоди:</b> продаж у «Товарах», виконання оптових замовлень, надходження на «Склад» з указаною ціною, ручний запис та масовий імпорт тут.</p>
+  <p>Це вбудований аналітичний рушій — він працює локально, без зовнішніх сервісів, і пояснює кожну рекомендацію.</p></details>`;
+}
+function draw(){
+  if(!$("#mk4"))shell();
+  const L=LAST=model(),T=tips(L),{t,f}=cfgT(),pm=PM();
+  const pr=L.filter(a=>a.isProd&&a.mkCur!=null),avg=pr.length?pr.reduce((x,a)=>x+a.mkCur,0)/pr.length:null;
+  $("#mk1").innerHTML=`<div class="scs">${sc("Угод у журналі","🧾",(pm.nb||0)+(pm.ns||0),"купівля "+(pm.nb||0)+" · продаж "+(pm.ns||0))}${sc("Середня націнка","📈",avg==null?"—":pc(avg),"за вашими цінами · "+pr.length+" поз.",avg==null?"":avg<f*100?"er":"gd")}${sc("Потребує уваги","⚠️",T.length,"занижено, збитково, застій",T.length?"er":"ok")}${sc("Цільова націнка","🎯",Math.round(t*100)+"%","мінімум "+Math.round(f*100)+"%","gd")}</div>`;
+  $("#mk2").innerHTML=tipsHtml(T);
+  const cnt={};FL.forEach(([k])=>cnt[k]=L.filter(a=>pass(a,k)).length);
+  $("#mc").innerHTML=FL.map(([k,l])=>`<span class="chip ${UI.f===k?"on":""}" data-f="${k}">${l} <small>${cnt[k]}</small></span>`).join("");
+  $("#mk4").innerHTML=tableHtml(L);
+}
+
+function rangeBar(pts){
+  const v=pts.filter(p=>p.v!=null&&p.v>0).sort((a,b)=>a.v-b.v);
+  if(v.length<2)return"";
+  const lo=v[0].v,sp=(v[v.length-1].v-lo)||1;
+  return`<div class="rgb">${v.map((p,i)=>`<div class="rgm ${p.c} ${i%2?"dn":"up"}" style="left:${(((p.v-lo)/sp)*100).toFixed(1)}%"><em><b>${fm(p.v)}</b><small>${p.l}</small></em></div>`).join("")}</div>`;
+}
+function spark(arr,col){
+  if(!arr||arr.length<2)return'<p class="meta">Замало точок для графіка.</p>';
+  const W=260,H=54,P=4,ps=arr.map(x=>x[1]),lo=Math.min(...ps),hi=Math.max(...ps),sp=(hi-lo)||1;
+  const d=arr.map((x,i)=>(i?"L":"M")+(P+i*(W-2*P)/(arr.length-1)).toFixed(1)+" "+(H-P-(x[1]-lo)/sp*(H-2*P)).toFixed(1)).join("");
+  return`<svg class="spk" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path d="${d}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>`;
+}
+const ICO={i:"•",ok:"✅",wr:"⚠️",er:"⛔"};
+
+async function reload(){
+  try{if(CONFIG.API_URL&&!S.preview)S.pm=await api("pricing.overview")}catch(e){}
+  S.bp=loadRef();await S.bp;
+  if(document.getElementById("mk4"))draw();
+}
+
+function openDetail(name){
+  const a=advise(name);
+  const sale=[{v:a.cost,l:"собівартість",c:"cost"}];
+  if(a.s)sale.push({v:a.s.min,l:"мін. продаж",c:"mn"},{v:a.s.max,l:"макс. продаж",c:"mx"});
+  if(a.rec)sale.push({v:a.rec.fair,l:"реком.",c:"rec"});
+  if(a.cur!=null)sale.push({v:a.cur,l:"ваша",c:"cur"});
+  const buy=a.b?[{v:a.b.min,l:"мін.",c:"mn"},{v:a.b.avg,l:"середня",c:""},{v:a.b.max,l:"макс.",c:"mx"},{v:a.buyRec.good,l:"вигідно",c:"rec"}]:[];
+  const m=pnl(`<div class="ph2"><h3>💹 ${esc(name)}</h3><button class="btn ghost x">✕</button></div>
+  <div class="scs" style="margin-top:10px">${sc("Собівартість","🧾",a.cost?fm(a.cost)+(a.complete?"":"*"):"—",a.isProd?(a.complete?"за цінами сировини":"неповна"):"це сировина")}${sc("Рекомендована","💡",a.rec?fm(a.rec.fair):a.buyRec?fm(a.buyRec.fair):"—",a.rec?"швидко "+n2(a.rec.fast)+" · макс "+n2(a.rec.top):a.buyRec?"купувати ≤ "+n2(a.buyRec.cap):"замало даних","gd")}${sc("Ваша ціна","🏷️",a.cur!=null?fm(a.cur):"—",a.mkCur!=null?"націнка "+pc(a.mkCur):"націнка невідома",a.mkCur!=null&&a.mkCur<0?"er":"")}${sc("Угод","🧾",(a.s?a.s.n:0)+(a.b?a.b.n:0),"купівля "+(a.b?a.b.n:0)+" · продаж "+(a.s?a.s.n:0))}</div>
+  ${sale.filter(p=>p.v).length>1?`<h3 style="margin:10px 0 0;font-size:14px">Шкала продажу</h3>${rangeBar(sale)}`:""}
+  ${buy.length?`<h3 style="margin:10px 0 0;font-size:14px">Шкала закупівлі</h3>${rangeBar(buy)}`:""}
+  <div class="two" style="margin:10px 0">${a.s?`<div class="card"><small class="meta">Динаміка цін продажу</small>${spark(a.s.pts,"#f7b733")}</div>`:""}${a.b?`<div class="card"><small class="meta">Динаміка цін купівлі</small>${spark(a.b.pts,"#2fd9bb")}</div>`:""}</div>
+  <div class="card" style="margin-bottom:10px"><h3 style="margin-bottom:6px;font-size:14px">Чому така рекомендація</h3>${a.notes.length?a.notes.map(n=>`<div class="nt">${ICO[n[0]]} ${esc(n[1])}</div>`).join(""):'<p class="meta">Даних поки немає — запишіть угоди.</p>'}</div>
+  <div class="acts" style="margin:0 0 12px">${a.rec?`<button class="btn" id="da">Застосувати ${fm(a.rec.fair)} як свою ціну</button>`:""}<button class="btn ghost" id="dt">+ Записати угоду</button></div>
+  <h3 style="font-size:14px;margin-bottom:6px">Останні угоди</h3><div id="dh">${SK}</div>`);
+  m.onclick=async e=>{const T=e.target;
+    if(T.closest(".x"))return m.remove();
+    if(T.closest("#da")){if(await setPrice(name,a.rec.fair)){toast("Ціну збережено");m.remove();if($("#mk4"))draw()}return}
+    if(T.closest("#dt")){m.remove();tradeForm(name)}};
+  if(CONFIG.API_URL&&!S.preview)api("pricing.history",{item:name,limit:60}).then(h=>{const el=m.querySelector("#dh");if(el)el.innerHTML=tbl([["time","Час"],["user","Хто"],["side","Тип",o=>o.side==="buy"?bdg("Купівля","tl"):bdg("Продаж","gd")],["qty","К-сть"],["price","Ціна",o=>`<b class="gd">${money(o.price)}</b>`],["source","Джерело"],["note","Примітка"]],h)}).catch(e=>{const el=m.querySelector("#dh");if(el)el.innerHTML=`<p class="meta">${esc(e.message)}</p>`});
+  else m.querySelector("#dh").innerHTML='<p class="meta">Історія доступна після підключення сервера.</p>';
+}
+
+function tradeForm(preset){
+  form("Записати угоду",[{k:"side",l:"Тип",o:[["buy","Купівля (ми купуємо)"],["sell","Продаж (ми продаємо)"]]},{k:"item",l:"Предмет",o:allNames(),v:preset},{k:"qty",l:"Кількість",t:"number",v:1},{k:"price",l:"Ціна за одиницю ($)",t:"number"},{k:"note",l:"Примітка (необов'язково)"}],async x=>{
+    if(!(x.price>0))throw new Error("Вкажіть ціну більшу за 0");
+    if(!(x.qty>=1))throw new Error("Кількість має бути від 1");
+    await api("pricing.log",x);toast("Угоду записано");await reload()});
+}
+function bulkTrades(){
+  form("Масовий імпорт цін",[{k:"side",l:"Тип",o:[["buy","Купівля (ми купуємо)"],["sell","Продаж (ми продаємо)"]]},{k:"list",l:"Список: «Назва: ціна» або «Назва: ціна: кількість» (кожен з нового рядка)",t:"area"},{k:"note",l:"Примітка (необов'язково)"}],async x=>{
+    const rows=[],bad=[];
+    x.list.split("\n").map(s=>s.trim()).filter(Boolean).forEach(s=>{
+      const m=s.match(/^(.+?)\s*[:;=\t]\s*(\d+(?:[.,]\d+)?)(?:\s*[:;x×*]\s*(\d+))?\s*$/);
+      if(!m)bad.push(s);else rows.push({name:m[1].trim(),price:+m[2].replace(",","."),qty:m[3]?+m[3]:1})});
+    if(bad.length)throw new Error("Не розпізнано: "+bad.slice(0,3).join(" | "));
+    if(!rows.length)throw new Error("Список порожній");
+    const r=await api("pricing.logMany",{side:x.side,rows,note:x.note});
+    toast("Записано угод: "+(r?.added??rows.length));await reload()});
+}
+function setForm(){
+  const{t,f}=cfgT();
+  form("Налаштування націнки",[{k:"target",l:"Цільова націнка, %",t:"number",v:Math.round(t*100)},{k:"floor",l:"Мінімальна націнка, % (нижче порадник не радить)",t:"number",v:Math.round(f*100)}],async x=>{
+    await api("pricing.settings",{target:x.target,floor:x.floor});toast("Збережено");await reload()});
+}
+
+VIEWS.market=async v=>{
+  const t=S.cur;v.onclick=null;v.oninput=null;v.onchange=null;
+  v.innerHTML=`<div class="top"><h2>Ціни та ринок</h2><div><button class="btn" id="mt1">+ Записати угоду</button><button class="btn ghost" id="mt2">Масовий імпорт</button>${isAdmin()?'<button class="btn ghost" id="mt3">⚙ Націнка</button>':""}</div></div>${noSrv()}<div id="mkb">${SK}</div>`;
+  $("#mt1").onclick=()=>tradeForm();$("#mt2").onclick=bulkTrades;if($("#mt3"))$("#mt3").onclick=setForm;
+  v.onclick=async e=>{const T=e.target;
+    const c=T.closest("#mc [data-f]");if(c){UI.f=c.dataset.f;draw();return}
+    const d=T.closest("[data-det]");if(d)return openDetail(d.dataset.det);
+    const x=T.closest("[data-fix]");if(x){if(await setPrice(x.dataset.fix,x.dataset.p)){toast("Ціну збережено: "+x.dataset.fix);draw()}}};
+  v.oninput=e=>{if(e.target.id==="mq"){UI.q=e.target.value;$("#mk4").innerHTML=tableHtml(LAST)}};
+  v.onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){toast("Збережено");draw()}};
+  await ready();if(t!==S.cur)return;
+  draw();
+  if(CONFIG.API_URL&&!S.preview)try{const d=await api("pricing.overview");if(t!==S.cur||!d)return;S.pm=d;draw()}catch(e){toast(e.message,"er")}
+};
+window.PRICING={advise,costOf,tips,recipeMap};
+
+/* ---------- loadRef: тепер підтягує і статистику цін ---------- */
+loadRef=async function(){
+  if(!CONFIG.API_URL||S.preview)return;
+  try{const d=await api("boot");if(!d)return;
+    S.inv=d.inv||{};S.prices=d.prices||{};S.total=d.total;S.dash=d.dash;CONFIG.CAPACITY=d.capacity||CONFIG.CAPACITY;
+    if(d.pm)S.pm=d.pm;
+    if(d.recipes?.length){RECIPES.length=0;RECIPES.push(...d.recipes)}}
+  catch(e){toast(e.message,"er")}
+};
+
+/* ---------- нова структура меню ---------- */
+PAGES.length=0;
+[["home","🏠","Головна","РОБОТА"],["craft","⚗️","Крафт"],["goods","🛒","Товари"],["stock","📦","Склад аптеки"],["orders","📑","Оптові замовлення"],
+ ["market","💹","Ціни та ринок","РИНОК І РОЗРАХУНКИ"],["calc","🧮","Підрахунок"],["scheme","🧬","Схема крафту"],["plan","📋","План виробництва"],["tax","🧾","Податок"],
+ ["log","📜","Журнал операцій","СПІЛЬНЕ"],["profile","👤","Профіль","АКАУНТ"],["alerts","🔔","Система оповіщення","АДМІНІСТРАТОР"],["admin","🛡️","Адмін-панель"]].forEach(p=>PAGES.push(p));
+Object.keys(NP).forEach(k=>delete NP[k]);
+Object.assign(NP,{craft:"craft",goods:"goods",stock:"stock",orders:"orders",market:"prices",plan:"craft"});
+PERMS.splice(0,PERMS.length,["stock","Склад: перегляд"],["stock_edit","Склад: зміни"],["craft","Крафт"],["goods","Товари"],["orders","Замовлення"],["prices","Ціни та ринок"],["bank","Податок"]);
+delete VIEWS.buy;delete VIEWS.herbs;delete VIEWS.bank;VIEWS.prices=VIEWS.market;
+const _go=go;
+go=function(id){if(!PAGES.some(p=>p[0]===id))id="home";_go(id)};
+
+/* прибираємо згадки банку в підказках */
+const _toast=toast;toast=function(m,t){return _toast(String(m).replace(", гроші в банку","").replace(", витрату записано в банк",""),t)};
+const _sure=sure;sure=function(m,fn){return _sure(String(m).replace(" Виручка надійде в банк.",""),fn)};
+
+/* ---------- інтеграція у форми ---------- */
+function enhanceListForm(m){
+  if(!m)return;
+  const pi=m.querySelector('[name="price"]'),ni=m.querySelector('input[name="name"]');
+  if(!pi)return;
+  const box=document.createElement("div");box.className="advx";pi.after(box);
+  const prev=document.createElement("div");prev.className="meta";prev.style.marginTop="4px";box.after(prev);
+  const upd=()=>{
+    const n=ni&&ni.value;
+    if(!n){box.innerHTML='<div class="meta">Оберіть товар — покажу рекомендовану ціну.</div>';prev.textContent="";return}
+    const a=advise(n);box.innerHTML=adviceHtml(a,"data-fillp");
+    const p=parseFloat(pi.value);
+    prev.textContent=p>0&&a.cost?"Ваша ціна "+fm(p)+" → націнка "+pc((p/a.cost-1)*100)+(a.rec?" · реком. "+fm(a.rec.fair):""):"";
+  };
+  m.addEventListener("click",()=>setTimeout(upd,0));
+  m.addEventListener("input",e=>{if(e.target===pi)upd()});
+  box.onclick=e=>{const b=e.target.closest("[data-fillp]");if(b){pi.value=b.dataset.fillp;upd()}};
+  upd();
+}
+const _form=form;
+form=function(title,fields,done){
+  if(title==="Операція зі складом"){
+    const i=fields.findIndex(f=>f.k==="reason"),pf={k:"price",l:"Ціна закупівлі за од., $ (лише для «Надходження» — піде в аналітику цін)",t:"number"};
+    fields=i<0?fields.concat([pf]):fields.slice(0,i).concat([pf],fields.slice(i));
+  }
+  const r=_form(title,fields,done);
+  if(title==="Виставити товар на продаж")try{enhanceListForm(document.querySelector(".pnl"))}catch(e){console.warn(e)}
+  return r;
+};
+
+/* ---------- декорування сторінок (картки Товарів, Крафт/Підрахунок/План) ---------- */
+function goodsLine(a,price){
+  if(!a.rec)return'<div class="meta">💡 Немає даних для рекомендації.</div>';
+  const d=price?(price/a.rec.fair-1)*100:null;
+  return`💡 Реком. <b>${fm(a.rec.fair)}</b> (${n2(a.rec.fast)}–${n2(a.rec.top)})${d!=null?` · ваша ${pc(d)} <span class="${d<-15||d>25?"wr-t":"ok-t"}">${d<-15?"занижена":d>25?"завищена":"в нормі"}</span>`:""}${a.recMk!=null?" · націнка "+pc(a.recMk):""}`;
+}
+function decorate(){
+  document.querySelectorAll("#view .card.rc").forEach(c=>{
+    if(c.querySelector(".advx")||!c.querySelector('[data-a="sell"]'))return;
+    const h=c.querySelector("h3");if(!h)return;
+    let price=null;
+    c.querySelectorAll(".rw").forEach(r=>{if(/Ціна за од/.test(r.textContent)){const b=r.querySelector("b");if(b)price=parseFloat(b.textContent.replace(/[$,]/g,""))}});
+    const box=document.createElement("div");box.className="advx";box.innerHTML=goodsLine(advise(h.textContent.trim()),price);
+    const ra=c.querySelector(".ra");ra?ra.before(box):c.append(box);
+  });
+  document.querySelectorAll("#view .rw").forEach(r=>{
+    const sp=r.firstElementChild;if(!sp||sp.tagName!=="SPAN")return;
+    const m=/^Ціна продажу «(.+)» за од\.$/.exec(sp.textContent.trim());if(!m)return;
+    if(r.nextElementSibling&&r.nextElementSibling.classList.contains("advx"))return;
+    const box=document.createElement("div");box.className="advx";box.innerHTML=adviceHtml(advise(m[1]),"data-fillc");r.after(box);
+  });
+  document.querySelectorAll("#view .sc").forEach(c=>{if(/Витрачено на скупку/.test(c.textContent))c.remove()});
+}
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-fillc]");if(!b)return;
+  const inp=[...document.querySelectorAll("#view .pr")].find(x=>x.dataset.n===b.dataset.n);if(!inp)return;
+  inp.value=b.dataset.fillc;inp.dispatchEvent(new Event("change",{bubbles:true}));
+});
+let q=0;
+new MutationObserver(()=>{if(q)return;q=requestAnimationFrame(()=>{q=0;try{decorate()}catch(e){}})}).observe(document.body,{childList:true,subtree:true});
 })();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
