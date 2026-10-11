@@ -1697,7 +1697,6 @@ function costOf(name,rm){
   const c=f(name,[]);
   return{cost:c,complete:!unk.size,unknown:[...unk]};
 }
-
 /* ---------- РУШІЙ (простий і прозорий) ----------
    ПРОДАЖ:   Швидко = найнижча ціна, за якою продавали
              Оптимально = свіжа середня (немає продажів → собівартість + цільова націнка)
@@ -1727,7 +1726,7 @@ function advise(name,rm){
 }
 const ST={nodata:["Немає даних","mu"],noprice:["Без ціни","wr"],loss:["Збиток","er"],low:["Дешево","wr"],high:["Дорого","wr"],ok:["Норма","ok"],buy:["Закупівля","tl"]};
 const needAtt=a=>a.status==="loss"||a.status==="low"||a.status==="high";
-
+  
 /* ---------- сторінка «Ціни та ринок» ---------- */
 const CAT=CATS.concat(["Сировина"]),CICO=ICON.concat(["📦"]);
 const UI={q:"",c:-1,att:false};
