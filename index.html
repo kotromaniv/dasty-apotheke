@@ -1652,7 +1652,7 @@ const eff=()=>PREV||HPS||null;
 function sync(){const th=eff()||"default",k=HP[th]||null,first=cur===null;if(th===cur)return;cur=th;
   ["hp","hc","hh","hx"].forEach(c=>R.classList.remove(c));
   if(k){R.classList.add("hp",k);font(k);if(!first){veil.style.background="radial-gradient(circle at 50% 40%,"+VC[k]+",transparent 70%)";veil.classList.remove("on");void veil.offsetWidth;veil.classList.add("on")}}
-  build(k);if(AU.on&&mus)music()}
+  build(k);dispatchEvent(new Event("hptheme"));if(AU.on&&mus)music()}
 /* тема з сервера приходить через існуючий applySync — старий код не змінюємо */
 const _as=window.applySync;
 window.applySync=function(s){const r=_as.apply(this,arguments);
@@ -1729,6 +1729,114 @@ music=function(){const th=cur||"default",k=HP[th];
   const bus=ctx.createGain(),dry=ctx.createGain(),wet=ctx.createGain();dry.gain.value=.7;wet.gain.value=.55;bus.connect(dry);dry.connect(cp);bus.connect(rev(ctx));rev(ctx).connect(wet);wet.connect(cp);
   const v=voices(ctx,bus),sc=SCORE[k],run=()=>{if(document.hidden)return;if(ctx.state==="suspended")ctx.resume();try{sc.bar(v)}catch(e){}};
   run();mus={g,th,t:setInterval(run,sc.ms)};syncBtn()};
+})();
+
+/*PATCH_HP_SCENE — головна-вітрина, ілюстровані сцени, верхня навігація*/
+(function(){
+"use strict";
+const R=document.documentElement,rn=(a,b)=>a+Math.random()*(b-a),X='xmlns="http://www.w3.org/2000/svg"';
+const U=s=>'url("data:image/svg+xml,'+encodeURIComponent(s)+'")';
+const K=()=>R.classList.contains("hc")?"hc":R.classList.contains("hh")?"hh":R.classList.contains("hx")?"hx":null;
+const COL={hc:"#d0ae6c",hh:"#e09248",hx:"#d6b86e"};
+const T={
+ hc:{t:"Dasty Apotheke",s:"Магія турботи про ваше здоров'я",b:"Перейти до крафту",sky:["#0b1a38","#1c2a52","#3a3558"],lq:["#8ec5ff","#ff7a3d","#d0ae6c","#9aa7b5"],h:"Популярні рецепти"},
+ hh:{t:"Геловін вже близько…",s:"Особливі зілля для особливого настрою",b:"Перейти до крафту",sky:["#1a0b22","#3a1530","#7a2e1a"],lq:["#ff8a1f","#a58be6","#e8d49a","#c0392b"],h:"Популярні рецепти"},
+ hx:{t:"Час для добрих справ і теплих зілль.",s:"Навіть магія любить свято.",b:"Перейти до крафту",sky:["#071a22","#12303a","#274a56"],lq:["#e24a5a","#7fd3a2","#d6b86e","#9cc7d8"],h:"Зимові рецепти"}
+};
+/* ---------- примітиви ілюстрацій ---------- */
+const candle=(x,b,h)=>`<circle class="gl" cx="${x}" cy="${b-h-12}" r="38" fill="url(#g1)"/><rect x="${x-5}" y="${b-h}" width="10" height="${h}" rx="2" fill="#efe3c2"/><rect x="${x-5}" y="${b-h}" width="4" height="${h}" fill="#fff" opacity=".35"/><path class="fl" d="M${x} ${b-h-20}q7 10 0 17q-7-7 0-17z" fill="url(#gf)"/>`;
+const books=(x,b)=>[["#5a3a22",150,22],["#2f4a3a",130,20],["#6b2b2b",142,18]].map(([c,w,h],i)=>{const y=b-[22,42,60][i];return`<rect x="${x-w/2+i*7}" y="${y}" width="${w}" height="${h}" rx="3" fill="${c}"/><rect x="${x-w/2+i*7}" y="${y+h-5}" width="${w}" height="3" fill="#e8d3a2" opacity=".5"/><rect x="${x-w/2+i*7+12}" y="${y+4}" width="3" height="${h-8}" fill="#d0ae6c" opacity=".7"/>`}).join("");
+const owl=(x,b,c)=>`<g><ellipse cx="${x}" cy="${b-34}" rx="21" ry="33" fill="${c}"/><circle cx="${x}" cy="${b-72}" r="18" fill="${c}"/><path d="M${x-16} ${b-84}l4 14h-10zM${x+16} ${b-84}l-4 14h10z" fill="${c}"/><circle cx="${x-7}" cy="${b-72}" r="6" fill="#fff"/><circle cx="${x+7}" cy="${b-72}" r="6" fill="#fff"/><circle cx="${x-7}" cy="${b-72}" r="2.6" fill="#e0a020"/><circle cx="${x+7}" cy="${b-72}" r="2.6" fill="#e0a020"/><path d="M${x-3} ${b-66}h6l-3 6z" fill="#8a6a3a"/><path d="M${x-12} ${b-44}q4 6 8 0M${x+4} ${b-44}q4 6 8 0M${x-9} ${b-30}q4 6 8 0M${x+1} ${b-30}q4 6 8 0" stroke="#b8a888" fill="none" stroke-width="1.5"/></g>`;
+const raven=(x,b)=>`<path d="M${x-30} ${b}q6-42 32-40q14 0 20 12l16 4-16 5q-6 20-30 24z" fill="#09090e"/><circle cx="${x+18}" cy="${b-34}" r="2" fill="#ff8a1f"/>`;
+const pump=(x,b,r)=>`<ellipse cx="${x}" cy="${b-r*.8}" rx="${r*1.15}" ry="${r*.88}" fill="#d9661a"/><ellipse cx="${x-r*.5}" cy="${b-r*.8}" rx="${r*.4}" ry="${r*.85}" fill="#f08a2c" opacity=".7"/><ellipse cx="${x+r*.5}" cy="${b-r*.8}" rx="${r*.4}" ry="${r*.85}" fill="#a84a10" opacity=".6"/><rect x="${x-3}" y="${b-r*1.75}" width="7" height="${r*.35}" rx="2" fill="#4c6a22"/><g class="fl" fill="#ffd54a"><path d="M${x-r*.6} ${b-r*1.05}l${r*.3} ${-r*.25}l${r*.1} ${r*.3}zM${x+r*.6} ${b-r*1.05}l${-r*.3} ${-r*.25}l${-r*.1} ${r*.3}z"/><path d="M${x-r*.7} ${b-r*.55}q${r*.7} ${r*.6} ${r*1.4} 0l${-r*.2} ${-r*.18}l${-r*.2} ${r*.14}l${-r*.3} ${-r*.14}l${-r*.3} ${r*.14}l${-r*.2} ${-r*.14}z"/></g>`;
+const bat=(y,d,l)=>`<g transform="translate(0 ${y})"><g class="bt" style="--d:${d}s;animation-delay:-${l}s"><path class="wf" d="M0 0c-6-8-15-10-26-6 4 3 3 8 6 12 3-2 5-2 7 3 2-3 5-5 7-5s5 2 7 5c2-5 4-5 7-3 3-4 2-9 6-12-11-4-20-2-26 6z" fill="#150b24"/></g></g>`;
+const castle=(x,b,s,f,w)=>`<g transform="translate(${x} ${b-130*s}) scale(${s})"><path fill="${f}" d="M0 130V78h18V46l8-26 8 26v32h14V56h10V22l7-22 7 22v34h10v24h24V66h14V34l9-24 9 24v32h14V90h12v40z"/>${w?[[24,60],[60,40],[76,30],[120,50],[134,70],[152,40]].map(([a,c])=>`<rect class="tw" x="${a}" y="${c}" width="4" height="7" fill="#ffcf7a" style="animation-delay:-${rn(0,4).toFixed(1)}s"/>`).join(""):""}</g>`;
+const stars=n=>Array.from({length:n},()=>`<circle class="tw" cx="${rn(0,1200).toFixed(0)}" cy="${rn(0,200).toFixed(0)}" r="${rn(.6,1.6).toFixed(1)}" fill="#fff" style="animation-delay:-${rn(0,5).toFixed(1)}s"/>`).join("");
+const arch=(x,y,w,h,inner,stroke)=>`<clipPath id="ac"><path d="M${x} ${y+h}V${y+w/2}A${w/2} ${w/2} 0 0 1 ${x+w} ${y+w/2}V${y+h}z"/></clipPath><g clip-path="url(#ac)"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="url(#gs)"/>${inner}</g><path d="M${x} ${y+h}V${y+w/2}A${w/2} ${w/2} 0 0 1 ${x+w} ${y+w/2}V${y+h}" fill="none" stroke="${stroke}" stroke-width="5"/><path d="M${x+w/2} ${y}V${y+h}M${x} ${y+h*.5}H${x+w}" stroke="${stroke}" stroke-width="3" opacity=".8"/>`;
+const shelf=()=>[[120,.5],[230,.45],[340,.4]].map(([y,o],r)=>{let a="",xx=0;while(xx<420){const w=rn(11,20),h=rn(46,86);a+=`<rect x="${xx}" y="${y-h}" width="${w}" height="${h}" fill="hsl(${rn(15,40).toFixed(0)} 35% ${rn(14,28).toFixed(0)}%)"/>`;xx+=w+1}return`<g opacity="${o}">${a}<rect x="0" y="${y}" width="430" height="6" fill="#3a2614"/></g>`}).join("");
+const pine=(x,y,f)=>`<g transform="translate(${x} ${y}) scale(${f} 1)" stroke="#2f6a45" stroke-width="3" stroke-linecap="round">${Array.from({length:9},(_,i)=>`<path d="M${i*22} ${i*3}q18 ${10+i*2} 40 ${6+i*4}"/>`).join("")}<path d="M0 0H200" stroke="#3a2a1a" stroke-width="4"/><g fill="#c0354a" stroke="none"><circle cx="40" cy="12" r="5"/><circle cx="120" cy="24" r="5"/><path d="M80 8l-16-8v18zM80 8l16-8v18z"/></g></g>`;
+const garland=()=>{let p="M0 20Q150 70 300 20T600 20T900 20T1200 20",b="";for(let i=0;i<22;i++){const x=i*57+20,y=20+30*Math.abs(Math.sin(Math.PI*((x%300)/300)));b+=`<circle class="tw" cx="${x}" cy="${y.toFixed(0)}" r="5" fill="${["#ffcf7a","#f3ead8","#ff7a8a","#9cc7d8"][i%4]}" style="animation-delay:-${(i*.37).toFixed(2)}s"/>`}return`<path d="${p}" fill="none" stroke="#1f4a30" stroke-width="2"/>${b}`};
+const lantern=(x,b)=>`<rect x="${x-14}" y="${b-70}" width="28" height="60" rx="4" fill="#1a1410" stroke="#8a6a3a" stroke-width="3"/><circle class="gl" cx="${x}" cy="${b-40}" r="46" fill="url(#g1)"/><path class="fl" d="M${x} ${b-56}q9 14 0 26q-9-12 0-26z" fill="url(#gf)"/><path d="M${x-10} ${b-70}q10-18 20 0" fill="none" stroke="#8a6a3a" stroke-width="3"/>`;
+const web=(f)=>`<g stroke="rgba(230,220,255,.35)" fill="none" transform="${f}"><path d="M0 0L150 150M0 0L110 150M0 0L150 100M0 0L60 150M0 0L150 50M0 40Q30 30 40 0M0 80Q60 60 80 0M0 120Q90 90 120 0"/></g>`;
+function scene(k){
+  const t=T[k],S=t.sky;
+  const defs=`<defs><radialGradient id="g1"><stop offset="0" stop-color="#ffd27a" stop-opacity=".85"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient><linearGradient id="gf" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#ff9a1f"/><stop offset=".6" stop-color="#ffd86a"/><stop offset="1" stop-color="#fff6c8"/></linearGradient><linearGradient id="gs" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${S[0]}"/><stop offset=".6" stop-color="${S[1]}"/><stop offset="1" stop-color="${S[2]}"/></linearGradient><radialGradient id="gm"><stop offset="0" stop-color="#fff2c8"/><stop offset=".6" stop-color="#ffc766"/><stop offset="1" stop-color="#ff9a2a" stop-opacity="0"/></radialGradient></defs>`;
+  let g="";
+  if(k==="hc")g=`<rect width="1200" height="400" fill="#0a1020"/>${shelf()}${arch(690,40,300,360,stars(26)+`<circle cx="930" cy="130" r="18" fill="#f3e6b8"/>`+castle(740,330,1.7,"#0a0f20",1),"#b8975a")}<rect x="640" y="372" width="420" height="28" fill="#1a1208"/>${books(1090,372)}${owl(1090,312,"#e9dcc0")}${candle(70,400,120)}${candle(130,400,70)}${candle(560,400,44)}<g class="sw">${stars(0)}</g>`;
+  else if(k==="hh")g=`<rect width="1200" height="400" fill="url(#gs)"/>${stars(30)}<circle class="mn" cx="860" cy="150" r="140" fill="url(#gm)"/><circle cx="860" cy="150" r="92" fill="#ffb347"/><circle cx="835" cy="130" r="14" fill="#f2992e" opacity=".6"/><circle cx="888" cy="172" r="10" fill="#f2992e" opacity=".6"/>${castle(560,400,2.6,"#0b0612",1)}${bat(60,14,0)}${bat(120,19,6)}${bat(30,24,11)}<rect y="372" width="1200" height="30" fill="#0a0510"/>${pump(520,382,46)}${pump(690,384,64)}${pump(820,382,38)}${books(1110,380)}${raven(1110,320)}${candle(90,400,100)}${candle(150,400,54)}${web("")}${web("translate(1200 0) scale(-1 1)")}`;
+  else g=`<rect width="1200" height="400" fill="#06161c"/><rect width="1200" height="400" fill="url(#gs)" opacity=".25"/>${arch(660,30,320,370,stars(20)+castle(700,340,1.9,"#07131a",1)+`<circle cx="900" cy="120" r="14" fill="#eaf4ff"/>`,"#c9a85c")}<rect x="640" y="372" width="360" height="28" fill="#0d1e22"/>${lantern(1060,400)}${lantern(1130,376)}${candle(60,400,100)}${candle(120,400,64)}${books(300,400)}${candle(300,338,30)}${garland()}${pine(0,0,1)}${pine(1000,0,-1)}`;
+  return`<svg class="sc3" ${X} viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${defs}${g}</svg>`}
+/* ---------- вітрина ---------- */
+const lqArt=(i,c)=>[`<circle cx="50" cy="78" r="30" fill="${c}" opacity=".85"/><rect x="42" y="30" width="16" height="22" fill="#cfe0ea" opacity=".55"/><rect x="38" y="26" width="24" height="6" rx="2" fill="#8a6a3a"/><ellipse cx="42" cy="68" rx="7" ry="12" fill="#fff" opacity=".25"/>`,`<rect x="40" y="26" width="20" height="80" rx="10" fill="${c}" opacity=".85"/><rect x="38" y="16" width="24" height="12" rx="3" fill="#8a6a3a"/><ellipse cx="46" cy="64" rx="3" ry="22" fill="#fff" opacity=".28"/>`,`<rect x="18" y="34" width="64" height="70" rx="4" fill="#4a3220"/><rect x="18" y="34" width="8" height="70" fill="#2e1e12"/><circle cx="54" cy="68" r="14" fill="none" stroke="${c}" stroke-width="2"/><path d="M54 58v20M44 68h20" stroke="${c}" stroke-width="2"/>`,`<rect x="26" y="40" width="48" height="64" rx="12" fill="${c}" opacity=".8"/><rect x="30" y="28" width="40" height="14" rx="4" fill="#8a6a3a"/><ellipse cx="38" cy="70" rx="5" ry="16" fill="#fff" opacity=".25"/>`][i%4];
+function showcase(v){
+  const k=K();if(!k)return;const t=T[k],c=COL[k];
+  const nm=(S.user&&S.user.name)||"",nav=document.querySelector('#nl a[data-p=craft]');
+  const rs=RECIPES.filter(r=>!r.na&&r.cat<7).sort((a,b)=>stock(b.name)-stock(a.name)).slice(0,4);
+  const m=(S.dash&&S.dash.mine)||{},tot=totalNow();
+  const F=[["📦","Склад",tot+" од.","усього на складі"],["📜","Рецепти",RECIPES.filter(r=>!r.na).length,"доступних у книзі"],["⭐","Вміння","Рівень "+mySk(),"ваш поточний рівень"],["⚗️","Крафти",m.crafts!=null?m.crafts:"—","за цей тиждень"]];
+  const h=`<section class="hphero hp-in" data-k="${k}">${scene(k)}<div class="hpt"><h1>${esc(t.t)}</h1><p>${esc(t.s)}</p><small>${esc(nm)}</small>${nav?`<button class="hpb" data-hpg="craft">${t.b} <span>→</span></button>`:""}</div></section>
+  <section class="hpf">${F.map(x=>`<div><i>${x[0]}</i><span><b>${x[2]}</b><small>${x[1]} · ${x[3]}</small></span></div>`).join("")}</section>
+  <div class="hph"><h2>${t.h}</h2><a data-hpg="craft">Усі рецепти →</a></div>
+  <div class="hpp">${rs.map((r,i)=>{const p=S.prices[r.name];return`<div class="hpc"><div class="art"><svg viewBox="0 0 100 120" ${X}><circle class="gl" cx="50" cy="70" r="46" fill="url(#g1)"/>${lqArt(i,t.lq[i%4])}</svg></div><h3>${esc(r.name)}</h3><small>${esc(CATS[r.cat])} · на складі ${stock(r.name)}</small><b>${p!=null?money(p):"ціну не вказано"}</b><button class="hpb sm" data-hpr="${esc(r.name)}">Створити</button></div>`}).join("")}</div>`;
+  v.querySelectorAll(".hphero,.hpf,.hph,.hpp").forEach(e=>e.remove());
+  v.insertAdjacentHTML("afterbegin",h);
+  v.querySelector(".hpp").insertAdjacentHTML("afterbegin",'<svg width="0" height="0" style="position:absolute"><defs><radialGradient id="g1"><stop offset="0" stop-color="#ffd27a" stop-opacity=".5"/><stop offset="1" stop-color="#ffd27a" stop-opacity="0"/></radialGradient></defs></svg>');
+}
+const _home=VIEWS.home;
+VIEWS.home=function(v,id){const r=_home.call(this,v,id);try{showcase(v);if(!v._hp){v._hp=1;v.addEventListener("click",e=>{const g=e.target.closest("[data-hpg]"),c=e.target.closest("[data-hpr]");if(g)go(g.dataset.hpg);if(c){craftQ=c.dataset.hpr;go("craft")}})}}catch(e){console.warn("hp home",e)}return r};
+addEventListener("hptheme",()=>{corners();if(S.user&&(location.hash.slice(1)||"home")==="home"&&!document.querySelector("#view .pnl"))go("home")});
+/* ---------- кути-рамки ---------- */
+function corners(){const k=K();if(!k)return;const c=COL[k],P=r=>U(`<svg ${X} viewBox="0 0 24 24"><g transform="rotate(${r} 12 12)" fill="none" stroke="${c}" stroke-width="1.4" stroke-linecap="round"><path d="M2 22V8a6 6 0 0 1 6-6h14"/><path d="M6 14V9a3 3 0 0 1 3-3h5" opacity=".6"/></g><circle cx="${[4,20,20,4][r/90]}" cy="${[4,4,20,20][r/90]}" r="1.6" fill="${c}"/></svg>`);
+  R.style.setProperty("--co",[0,90,180,270].map((r,i)=>`${P(r)} ${["left top","right top","right bottom","left bottom"][i]}/22px 22px no-repeat`).join(","))}
+const st=document.createElement("style");st.textContent=`
+html.hp #hd{position:static}html.hp .hero2{display:none}
+html.hp .rc::before,html.hp .hphero::before,html.hp .hpc::before,html.hp .hpf::before{content:"";position:absolute;inset:7px;pointer-events:none;z-index:3;display:block;background:var(--co);opacity:.8}
+html.hp .rc,html.hp .hpc{position:relative}
+.hphero{position:relative;min-height:340px;border-radius:14px;overflow:hidden;border:1px solid var(--bd);margin-bottom:16px;box-shadow:0 20px 50px -28px #000}
+.hphero svg.sc3{position:absolute;inset:0;width:100%;height:100%}
+.hphero::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(4,7,14,.9),rgba(4,7,14,.45) 42%,transparent 70%)}
+.hpt{position:relative;z-index:4;padding:56px 48px;max-width:560px}
+html.hp .hpt h1{font-size:clamp(30px,4.6vw,54px);line-height:1.06;text-align:left;color:var(--tx);margin-bottom:12px;text-shadow:0 2px 24px rgba(0,0,0,.7)}
+.hpt p{font-size:16px;color:var(--tx);opacity:.9;margin-bottom:6px}.hpt small{display:block;color:var(--mu);margin-bottom:22px}
+.hpb{display:inline-flex;gap:10px;align-items:center;padding:12px 24px;border:1px solid var(--ac);border-radius:99px;background:rgba(0,0,0,.3);color:var(--tx);font:600 14px Onest,sans-serif;cursor:pointer;transition:background .25s,color .25s,transform .2s}
+.hpb:hover{background:var(--ac);color:#150f05;transform:translateY(-2px)}.hpb.sm{width:100%;justify-content:center;padding:9px 12px;font-size:13px;margin-top:10px}
+.hp-in .hpt{animation:hpu .9s .1s both}.hp-in svg.sc3{animation:hpz 1.6s both}
+@keyframes hpu{from{opacity:0;transform:translateY(18px)}}@keyframes hpz{from{opacity:0;transform:scale(1.05)}}
+.hpf{position:relative;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));border:1px solid var(--bd);border-radius:12px;background:var(--card);margin-bottom:26px}
+.hpf>div{display:flex;gap:12px;align-items:center;padding:16px 18px;border-left:1px solid var(--bd)}.hpf>div:first-child{border:0}
+.hpf i{font-style:normal;font-size:22px;width:42px;height:42px;display:grid;place-items:center;border:1px solid var(--bd);border-radius:50%;color:var(--ac)}
+.hpf b{display:block;font-size:17px;color:var(--tx)}.hpf small{color:var(--mu);font-size:12px}
+.hph{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px}
+html.hp .hph h2{font-size:28px;color:var(--ac)}.hph a{color:var(--ac);cursor:pointer;font-size:13px}.hph a:hover{text-decoration:underline}
+.hpp{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:16px;margin-bottom:26px}
+.hpc{background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 40%),var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;transition:transform .25s,border-color .25s}
+.hpc:hover{transform:translateY(-4px);border-color:var(--ac)}
+.hpc .art{height:150px;border-radius:9px;margin-bottom:10px;display:grid;place-items:center;background:radial-gradient(circle at 50% 60%,rgba(var(--hpr),.22),rgba(0,0,0,.45))}
+.hpc .art svg{height:130px;animation:hpbob 5s ease-in-out infinite}
+.hpc h3{font-size:19px}.hpc small{display:block;color:var(--mu);font-size:12px;margin:2px 0 6px}.hpc b{color:var(--ac);font-size:17px}
+@keyframes hpbob{50%{transform:translateY(-6px)}}
+.fl{transform-box:fill-box;transform-origin:50% 100%;animation:hpfl .22s ease-in-out infinite alternate}
+@keyframes hpfl{from{transform:scale(.9,1.05) skewX(-4deg);opacity:.9}to{transform:scale(1.06,.95) skewX(4deg);opacity:1}}
+.gl{animation:hpgl 2.6s ease-in-out infinite alternate}@keyframes hpgl{from{opacity:.55}to{opacity:1}}
+.tw{animation:hptw 3.4s ease-in-out infinite alternate}@keyframes hptw{from{opacity:.2}to{opacity:1}}
+.mn{animation:hpgl 6s ease-in-out infinite alternate}
+.bt{animation:hpbt var(--d) linear infinite}@keyframes hpbt{from{transform:translate(-90px,0)}to{transform:translate(1320px,-50px)}}
+.wf{transform-box:fill-box;transform-origin:50% 50%;animation:hpwf .24s ease-in-out infinite alternate}@keyframes hpwf{to{transform:scaleY(.4)}}
+html.hp:not(.hx) #app{flex-direction:column}
+html.hp:not(.hx) nav{width:100%;height:auto;position:sticky;top:0;z-index:20;flex-direction:row;align-items:center;padding:10px 26px;gap:4px;border-right:0;border-bottom:1px solid var(--bd);overflow-x:auto}
+html.hp:not(.hx) nav .brand{margin-right:24px;padding:0;font-size:21px;white-space:nowrap}
+html.hp:not(.hx) #nl{display:flex;gap:2px;flex:1;justify-content:center}
+html.hp:not(.hx) .ng{display:none}
+html.hp:not(.hx) nav a{margin:0;padding:9px 13px;border:0;border-bottom:2px solid transparent;border-radius:0;white-space:nowrap;font-size:13.5px;background:none!important;transform:none}
+html.hp:not(.hx) nav a i{display:none}
+html.hp:not(.hx) nav a.on{border-bottom-color:var(--ac);box-shadow:none}html.hp:not(.hx) nav a.on::before{display:none}
+html.hp:not(.hx) .usr{margin:0 0 0 12px;border:0;padding:0}
+html.hp:not(.hx) #hd{display:none}
+html.hx nav a.on{border-radius:10px;background:rgba(214,184,110,.12)}
+@media(max-width:860px){.hpt{padding:34px 22px}.hphero::after{background:rgba(4,7,14,.62)}html.hp:not(.hx) nav a i{display:inline}}
+@media(prefers-reduced-motion:reduce){.fl,.gl,.tw,.bt,.wf,.mn,.hpc .art svg{animation:none}}
+`;document.head.append(st);
+corners();
 })();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
