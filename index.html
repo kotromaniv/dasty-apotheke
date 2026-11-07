@@ -1996,6 +1996,234 @@ TABS.look=function(b){_look(b);try{
 /* діагностика: якщо щось зламається, побачите повідомлення */
 let ec=0;addEventListener("error",e=>{if(ec++<3&&key())try{toast("Помилка скрипта: "+(e.message||"?")+" ("+(e.lineno||0)+")","er")}catch(x){}});
 })();
+  /*PATCH_V6_UI — вставити ПЕРЕД рядком: /* ===== авторизація та сесія ===== */
+(function(){
+"use strict";
+const R=document.documentElement;
+const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
+
+/* ===== 1. Прибрати вкладки ===== */
+["plan","bank","prices","buy","goods"].forEach(id=>{const i=PAGES.findIndex(p=>p[0]===id);if(i>=0)PAGES.splice(i,1)});
+["plan","bank","prices","buy","goods"].forEach(k=>delete NP[k]);
+Object.assign(NP,{home:"home",log:"log",tax:"tax",calc:"craft",scheme:"craft",craft:"craft",herbs:"herbs",stock:"stock",orders:"orders"});
+PERMS.length=0;
+PERMS.push(["home","Головна"],["stock","Склад: перегляд"],["stock_edit","Склад: зміни"],["craft","Крафт і схеми"],["herbs","Замовлення трав"],["orders","Оптові замовлення"],["log","Журнал"],["tax","Податок"]);
+const PN=Object.fromEntries(PERMS);
+const allowed=id=>{const p=PAGES.find(x=>x[0]===id);if(!p)return false;if(isAdmin())return true;if(id==="profile")return true;if(id==="alerts"||id==="admin")return false;return !NP[id]||(S.user.perms||"").split(",").includes(NP[id])};
+const _sa=showApp;showApp=function(){const h=location.hash.slice(1)||"home";if(!allowed(h)){const f=PAGES.find(p=>allowed(p[0]));location.hash=f?f[0]:"profile"}return _sa.apply(this,arguments)};
+/* зміна ролі підхоплюється без перезаходу */
+const _api=api;
+api=async function(a,d){const r=await _api(a,d);
+  if(a==="ping"&&r&&r.me&&S.user&&r.me.perms!==S.user.perms){S.user.perms=r.me.perms;buildNav();const h=location.hash.slice(1);document.querySelectorAll("#nl a").forEach(x=>x.classList.toggle("on",x.dataset.p===h));if(!allowed(h)){const f=PAGES.find(p=>allowed(p[0]));if(f)go(f[0])}}
+  return r};
+
+/* ===== 2. Користувачі: Telegram + роль (додаємо поля у наявні форми) ===== */
+let ROLES=[];
+const loadRoles=()=>_api("admin.roles",{}).then(r=>{ROLES=r||[]}).catch(()=>{});
+const _form=form;
+form=function(title,fields,done){
+  if(/^(Новий користувач|Редагування: )/.test(title)){
+    const edit=title.startsWith("Редагування: "),L=S.c["admin.users{}"]||[],o=edit?L.find(u=>u.name===title.slice(13)):null,i=fields.findIndex(f=>f.k==="login");
+    const ex=[{k:"tg",l:"Telegram (ім’я користувача без @) — для тегу в чаті",v:o?.tg||""},
+      {k:"roleId",l:"Роль (набір прав на сайті)",o:[["","Без ролі (ручні права нижче)"],...ROLES.map(r=>[r.id,r.name])],v:o?.roleId||""}];
+    fields=[...fields.slice(0,i+1),...ex,...fields.slice(i+1)];
+  }
+  return _form(title,fields,done)};
+const _tu=TABS.users;TABS.users=b=>{loadRoles();return _tu(b)};
+
+/* ===== 3. Ролі ===== */
+TABS.roles=b=>{let L=[];
+  const F=o=>[{k:"name",l:"Назва ролі (наприклад: Травник)",v:o?.name},{k:"perms",l:"Що дозволено бачити й робити",m:PERMS,v:(o?.perms||"").split(",").filter(Boolean)}];
+  page(b,"Ролі та права","admin.roles",{},d=>{L=d;ROLES=d;return `<p class="meta" style="margin-bottom:10px">Роль визначає, які вкладки бачить користувач. Призначається в «Користувачі → Змінити». Зміна діє за кілька секунд без перезаходу.</p>`+tbl([["name","Роль",o=>`<b>${esc(o.name)}</b>`],["perms","Права",o=>o.perms?o.perms.split(",").map(p=>bdg(PN[p]||p,"tl")).join(" "):bdg("лише профіль","mu")],["users","Користувачів"],["a","",o=>ra(o.id,[["edit","Змінити"],["del","Видалити"]])]],d)},`<button class="btn" id="b1">+ Нова роль</button>`);
+  $("#b1").onclick=()=>form("Нова роль",F(),async x=>{await api("admin.roleSave",x);VIEWS.admin($("#view"))});
+  rowAct(b,async(a,id)=>{const o=L.find(r=>r.id===id);if(!o)return;
+    if(a==="edit")return form("Роль: "+o.name,F(o),async x=>{await api("admin.roleSave",{...x,id});VIEWS.admin($("#view"))});
+    sure("Видалити роль «"+o.name+"»?",async()=>{if(await act("admin.roleDelete",{id}))VIEWS.admin($("#view"))})})};
+VIEWS.admin=v=>{
+  if(!isAdmin()){v.innerHTML='<div class="warn">Доступ заборонено</div>';return}
+  const T={over:"Огляд",users:"Користувачі",roles:"Ролі",sess:"Сесії",items:"Предмети",recipes:"Рецепти",pay:"Нарахування",fix:"Відновлення",logs:"Журнал",look:"Вигляд",tg:"Telegram",maint:"Рестарти",settings:"Налаштування",sheets:"Таблиці БД"};
+  if(!T[AT])AT="over";
+  v.innerHTML=`<div class="chips">${Object.entries(T).map(([k,l])=>`<span class="chip ${k===AT?"on":""}" data-t="${k}">${l}</span>`).join("")}</div><div id="at"></div>`;
+  v.onclick=e=>{const t=e.target.dataset.t;if(t){AT=t;VIEWS.admin(v)}};
+  TABS[AT]($("#at"))};
+const _tg=TABS.tg;
+TABS.tg=b=>{_tg(b);
+  b.insertAdjacentHTML("afterbegin",`<div class="card" style="margin-bottom:14px"><div class="ch"><h3>Гілки чату</h3></div><div class="rw"><span>🌿 Замовлення трав — гілка 79</span><button class="btn ghost" data-tt="herb">Тест</button></div><div class="rw"><span>🔔 Сповіщення — гілка 82</span><button class="btn ghost" data-tt="alert">Тест</button></div></div>`);
+  b.onclick=async e=>{const t=e.target.closest("[data-tt]");if(!t)return;t.disabled=true;try{await api("admin.tgTest2",{kind:t.dataset.tt});toast("Тест надіслано")}catch(x){toast(x.message,"er")}t.disabled=false}};
+
+/* ===== 4. Замовлення трав ===== */
+const dmy=s=>String(s||"").split("-").reverse().join(".");
+const dueB=o=>{if(!o.due)return"";if(o.status!=="Замовлено")return"";if(o.late)return bdg("Прострочено","er");
+  const n=Math.ceil((new Date(o.due+"T23:59:59").getTime()-Date.now())/864e5);return n<=1?bdg("Сьогодні/завтра","wr"):bdg("Ще "+n+" дн.","ok")};
+async function herbNew(){
+  let SUP=[];try{SUP=(await api("herb.suppliers"))||[]}catch(e){}
+  const hs=herbSet(),rw=rawNames(),op=a=>a.map(n=>`<option>${esc(n)}</option>`).join(""),
+    opts=`<optgroup label="Лікувальні трави">${op(rw.filter(n=>hs.has(n)))}</optgroup><optgroup label="Інша сировина">${op(rw.filter(n=>!hs.has(n)))}</optgroup>`,
+    row=()=>`<div class="orow"><select class="hi">${opts}</select><input class="hq" type="number" min="1" value="10"><input class="hp" type="number" min="0" step="0.01" placeholder="Ціна $"><button type="button" class="btn ghost hrm">✕</button></div>`,
+    d3=new Date(Date.now()+3*864e5).toISOString().slice(0,10),td=new Date().toISOString().slice(0,10);
+  const m=pnl(`<div class="ph2"><h3>🌿 Нове замовлення трав</h3><button class="btn ghost x">✕</button></div>
+  <label>Постачальник (його тегнуть у Telegram)</label><select id="hsup">${SUP.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} · @${esc(u.tg)}</option>`).join("")}<option value="">Інший — ввести вручну</option></select>
+  <div id="hman" class="${SUP.length?"hide":""}">${SUP.length?"":'<div class="note">Немає користувачів з Telegram. Додайте нік в Адмін-панель → Користувачі.</div>'}<label>Ім’я постачальника</label><input id="hsn"><label>Telegram (без @, для тегу)</label><input id="hst"></div>
+  <label>Виконати до</label><input id="hdu" type="date" value="${d3}" min="${td}">
+  <label>Позиції (предмет · кількість · ціна за од.)</label><div id="hrows">${row()}</div><button type="button" class="btn ghost" id="hadd" style="margin-top:6px">+ Додати позицію</button>
+  <div class="rw" style="margin-top:10px"><span id="hinfo" class="meta"></span><b class="er" id="htot"></b></div>
+  <label>Коментар</label><textarea id="hc" rows="2"></textarea><p class="meta" style="margin-top:8px">📨 Після збереження в гілку 79 піде повідомлення з усіма деталями й тегом постачальника.</p>
+  <div class="err" id="fe"></div><div class="acts"><button class="btn" id="fs">Замовити</button><button class="btn ghost x">Скасувати</button></div>`);
+  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
+  const rows=()=>[...m.querySelectorAll(".orow")];
+  const fill=r=>{const p=S.prices[r.querySelector(".hi").value];r.querySelector(".hp").value=p!=null?p:""};
+  const tot=()=>{let s=0,u=0;rows().forEach(r=>{const q=+r.querySelector(".hq").value||0;u+=q;s+=q*(+r.querySelector(".hp").value||0)});$("#hinfo",m).textContent=rows().length+" поз. · "+u+" од.";$("#htot",m).textContent="Разом: "+money(s)};
+  $("#hadd",m).onclick=()=>{$("#hrows",m).insertAdjacentHTML("beforeend",row());fill(rows().pop());tot()};
+  m.addEventListener("change",e=>{if(e.target.id==="hsup")$("#hman",m).classList.toggle("hide",!!e.target.value);if(e.target.classList.contains("hi"))fill(e.target.closest(".orow"));tot()});
+  m.addEventListener("input",e=>{if(e.target.matches(".hq,.hp"))tot()});
+  m.addEventListener("click",e=>{const b=e.target.closest(".hrm");if(b&&rows().length>1){b.closest(".orow").remove();tot()}});
+  fill(rows()[0]);tot();
+  const sb=$("#fs",m),er=t=>{$("#fe",m).textContent=t};
+  sb.onclick=async()=>{
+    const sid=$("#hsup",m).value,items=rows().map(r=>({name:r.querySelector(".hi").value,qty:+r.querySelector(".hq").value,price:r.querySelector(".hp").value}));
+    if(!sid&&!$("#hsn",m).value.trim())return er("Вкажіть постачальника");
+    if(!$("#hdu",m).value)return er("Вкажіть дату виконання");
+    if(items.some(i=>!(i.qty>0)))return er("Кількість має бути більшою за 0");
+    if(items.some(i=>i.price===""||!(+i.price>=0)))return er("Вкажіть ціну для кожної позиції");
+    sb.disabled=true;er("");
+    try{const r=await api("herb.save",{supplierId:sid,supplier:$("#hsn",m).value,tg:$("#hst",m).value,due:$("#hdu",m).value,note:$("#hc",m).value,items:items.map(i=>({...i,price:+i.price}))});
+      m.remove();
+      if(r&&r.tg)toast("Замовлення створено, повідомлення надіслано"+(r.tagged?" з тегом":" (без тегу — немає ніка TG)"));else toast("Створено, але Telegram: "+((r&&r.tgError)||"помилка"),"er");
+      go("herbs")}
+    catch(e){er(e.message);sb.disabled=false}};
+}
+VIEWS.herbs=v=>{
+  let D=[],f="act";
+  const stt=o=>o.status==="Замовлено"?"Очікує виконання":o.status;
+  const card=o=>`<div class="card rc"><div class="ch" style="margin:0"><h3>№${esc(o.num)}</h3>${sbg(stt(o))}</div>
+    <div class="meta">🌿 <b>${esc(o.supplier)}</b>${o.supplierTg?` · <b class="gd">@${esc(o.supplierTg)}</b>`:' · <span class="er">без тегу</span>'}</div>
+    <div class="meta">📅 ${esc(o.time)} · ✍️ ${esc(o.user)}</div>
+    <div class="rw"><span>⏳ Виконати до</span><span><b>${dmy(o.due)}</b> ${dueB(o)}</span></div>
+    ${o.items.map(x=>`<div class="ing"><span>${esc(x.name)} ×${x.qty}</span><span>${money(x.price*x.qty)}</span></div>`).join("")}
+    <div class="rw"><span>Разом · ${o.count} од.</span><b class="gd">${money(o.total)}</b></div>${o.note?`<div class="meta">📝 ${esc(o.note)}</div>`:""}
+    ${o.status==="Замовлено"?ra(o.id,[["rcv","✅ Отримано"],["rem","🔔 Нагадати"],["cnl","Скасувати"]]):""}</div>`;
+  const draw=d=>{D=d;const pe=d.filter(o=>o.status==="Замовлено"),late=pe.filter(o=>o.late),dn=d.filter(o=>o.status==="Отримано"),
+    l=f==="act"?pe:f==="done"?dn:d.filter(o=>o.status==="Скасовано");
+    return `<div class="scs">${sc("Очікують","⏳",pe.length,money(pe.reduce((a,o)=>a+o.total,0))+" до оплати")}${sc("Прострочені","🚨",late.length,"потрібне нагадування",late.length?"er":"ok")}${sc("Отримано","📦",dn.length,"замовлень","ok")}${sc("Витрачено","💸",money(dn.reduce((a,o)=>a+o.total,0)),"на трави й сировину","er")}</div>
+    <div class="chips">${[["act","⏳ Активні"],["done","✅ Отримані"],["cnl","❌ Скасовані"]].map(([k,t])=>`<span class="chip ${f===k?"on":""}" data-f="${k}">${t}</span>`).join("")}</div>
+    ${l.length?`<div class="grid">${l.map(card).join("")}</div>`:'<div class="card empty">Тут поки порожньо</div>'}`};
+  page(v,"Замовлення трав","herb.list",{},draw,`<button class="btn" id="b1">+ Нове замовлення</button>`,true);
+  $("#b1").onclick=herbNew;
+  v.onclick=e=>{const c=e.target.closest("[data-f]");if(c){f=c.dataset.f;$("#pb").innerHTML=draw(D);return}
+    const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
+    if(a==="rem")return act("herb.remind",{id},"Нагадування надіслано в Telegram");
+    if(a==="rcv")return sure("Підтвердити отримання? Товар надійде на склад, сума спишеться з каси.",async()=>{if(await act("herb.receive",{id},"Отримано: склад оновлено")){S.bp=loadRef();go("herbs")}});
+    sure("Скасувати замовлення? У чат піде повідомлення.",async()=>{if(await act("herb.cancel",{id}))go("herbs")})}};
+
+/* ===== 5. Оптові замовлення: матеріали, гроші, галочки ===== */
+function mats(items){
+  const rm=Object.fromEntries(RECIPES.filter(r=>!r.na&&r.ing).map(r=>[r.name,r])),L={},tg={};
+  items.forEach(i=>tg[i.name]=(tg[i.name]||0)+i.qty);
+  const lv=n=>{if(n in L)return L[n];L[n]=0;if(rm[n])L[n]=1+Math.max(0,...Object.keys(rm[n].ing).map(lv));return L[n]};
+  Object.keys(tg).forEach(lv);
+  const order=Object.keys(L).sort((a,b)=>L[b]-L[a]),need={...tg},cy={};
+  order.forEach(n=>{const r=rm[n];if(!r)return;const q=Math.max(0,(need[n]||0)-stock(n));if(q<=0)return;cy[n]=Math.ceil(q/r.yield);Object.entries(r.ing).forEach(([i,p])=>need[i]=(need[i]||0)+cy[n]*p)});
+  return{rm,order,need,cy}}
+async function ordOpen(id){
+  let o;try{o=await api("orders.get",{id})}catch(e){return toast(e.message,"er")}
+  let inv=(S.c["inventory.list{}"]||{}).items;if(!inv){try{inv=(await api("inventory.list",{})).items}catch(e){inv=[]}}
+  const NT={};inv.forEach(i=>NT[i.name]=i);
+  const key="ordchk:"+id;let ck=[];try{ck=JSON.parse(LS(key)||"[]")}catch(e){}
+  const el=pnl("");
+  const draw=()=>{
+    const L=o.items.map(x=>({n:x.name,q:+x.qty,s:+x.stock,p:x.price===""||isNaN(+x.price)?null:+x.price})),ok=l=>ck.includes(l.n)||l.s>=l.q;
+    const M=mats(L.map(l=>({name:l.n,qty:l.q}))),raw=M.order.filter(n=>!M.rm[n]&&M.need[n]>0),st=M.order.slice().reverse().filter(n=>M.cy[n]);
+    let full=0,buy=0,unk=0,time=0;
+    const mr=raw.map(n=>{const nd=M.need[n],have=stock(n),def=Math.max(0,nd-have),p=S.prices[n],it=NT[n];if(p==null)unk++;else{full+=nd*p;buy+=def*p}
+      return`<tr><td>${esc(n)}</td><td>${nd}</td><td>${have}</td><td class="${def?"bad":""}">${def}</td><td>${p==null?"—":money(p)}</td><td>${p==null?"—":money(def*p)}</td><td class="meta">${it&&(it.note||it.loc)?"📍 "+esc(it.note||it.loc):"—"}</td></tr>`}).join("");
+    const sr=st.map(n=>{const r=M.rm[n],t=M.cy[n]*r.time;time+=t;return`<tr><td><b>${esc(n)}</b></td><td>${M.cy[n]}</td><td>${M.cy[n]*r.yield}</td><td>${fmtT(t)}</td></tr>`}).join("");
+    const inc=L.reduce((a,l)=>a+(l.p==null?0:l.p*l.q),0),pf=unk?null:inc-full,dn=L.filter(ok).length,pc=L.length?Math.round(dn/L.length*100):0;
+    el.innerHTML=`<div class="ph2"><h3>📑 ${esc(o.title)} ${sbg(o.status)}</h3><button class="btn ghost" data-oa="x">✕</button></div>
+    <div class="meta">Готово позицій: <b>${dn} / ${L.length}</b> (${pc}%)</div><span class="bar"><i style="width:${pc}%"></i></span>
+    <div class="scs">${sc("Дохід","💵",money(inc),"за замовлення","gd")}${sc("Матеріали всього","🧾",money(full),unk?"без "+unk+" поз. без ціни":"повна вартість")}${sc("Докупити","🛒",money(buy),"лише чого бракує","er")}${sc("Прибуток","📈",pf==null?"—":money(pf),"дохід − матеріали",pf==null?"":pf>=0?"ok":"er")}${sc("Час крафту","⏱️",fmtT(time),st.length+" етап(ів)")}</div>
+    <h3 style="margin:6px 0">Готова продукція <small class="meta">— став галочку, коли готово</small></h3>
+    <div style="overflow-x:auto"><table><tr><th></th><th>Позиція</th><th>Треба</th><th>На складі</th><th>Ціна</th><th>Сума</th><th>Статус</th></tr>${L.map(l=>`<tr><td><input type="checkbox" class="ckb" data-n="${esc(l.n)}" ${ck.includes(l.n)?"checked":""} style="width:auto"></td><td><b>${esc(l.n)}</b></td><td>${l.q}</td><td>${l.s}</td><td>${l.p==null?"—":money(l.p)}</td><td>${l.p==null?"—":money(l.p*l.q)}</td><td>${ok(l)?bdg(l.s>=l.q?"є на складі":"готово","ok"):bdg("бракує "+(l.q-l.s),"wr")}</td></tr>`).join("")}</table></div>
+    ${sr?`<h3 style="margin:14px 0 6px">Що треба скрафтити</h3><div style="overflow-x:auto"><table><tr><th>Рецепт</th><th>Циклів</th><th>Вихід</th><th>Час</th></tr>${sr}</table></div>`:""}
+    <h3 style="margin:14px 0 6px">Сировина та де її брати</h3>${mr?`<div style="overflow-x:auto"><table><tr><th>Матеріал</th><th>Треба</th><th>Є</th><th>Бракує</th><th>Ціна/од.</th><th>Докупити на</th><th>Звідки</th></tr>${mr}</table></div>`:'<p class="meta">Сировина не потрібна — усе є на складі.</p>'}
+    <p class="meta" style="margin-top:8px">Галочки зберігаються в цьому браузері.</p>
+    ${["Виконано","Скасовано"].includes(o.status)?"":`<div class="acts"><button class="btn" data-oa="ful">Виконати зі складу</button><button class="btn ghost" data-oa="cnl">Скасувати замовлення</button></div>`}`};
+  el.onchange=e=>{const c=e.target.closest(".ckb");if(!c)return;const n=c.dataset.n;ck=c.checked?[...new Set([...ck,n])]:ck.filter(x=>x!==n);LS(key,JSON.stringify(ck));draw()};
+  el.onclick=e=>{const b=e.target.closest("[data-oa]");if(!b)return;const a=b.dataset.oa;
+    if(a==="x")return el.remove();
+    if(a==="ful")return sure("Списати зі складу наявне й записати дохід у касу?",async()=>{if(await act("orders.fulfill",{id},"Замовлення оброблено")){S.bp=loadRef();go("orders")}});
+    sure("Скасувати замовлення?",async()=>{if(await act("orders.status",{id,status:"Скасовано"}))go("orders")})};
+  draw();
+}
+VIEWS.orders=v=>{
+  let D=[],all=false;
+  const act_=o=>!["Виконано","Скасовано"].includes(o.status);
+  const card=o=>`<div class="card rc"><div class="ch" style="margin:0"><h3>${esc(o.title)}</h3>${sbg(o.status)}</div><div class="meta">👤 ${esc(o.party||"—")} · 📅 ${esc(o.due||"без дати")}</div>
+    <div class="rw"><span>Сума</span><b class="gd">${money(o.total)}</b></div><div class="meta">Виконано: ${esc(o.progress)}</div><span class="bar"><i style="width:${parseInt(o.progress)||0}%"></i></span>
+    ${ra(o.id,act_(o)?[["open","📋 Відкрити"],["ful","Виконати"],["cnl","Скасувати"]]:[["open","📋 Відкрити"]])}</div>`;
+  const draw=d=>{D=d;const a=d.filter(act_),l=all?d:a;
+    return `<div class="scs">${sc("Активні","📑",a.length,"у роботі")}${sc("Очікувана сума","💰",money(a.reduce((s,o)=>s+o.total,0)),"по активних","gd")}${sc("Виконано","✅",d.filter(o=>o.status==="Виконано").length,"за весь час","ok")}</div>
+    <div class="chips"><span class="chip ${all?"":"on"}" data-f="0">Активні</span><span class="chip ${all?"on":""}" data-f="1">Усі</span></div>
+    ${l.length?`<div class="grid">${l.map(card).join("")}</div>`:'<div class="card empty">Замовлень немає</div>'}`};
+  page(v,"Оптові замовлення","orders.list",{},draw,`<button class="btn" id="b1">+ Нове замовлення</button>`,true);
+  $("#b1").onclick=orderForm;
+  v.onclick=e=>{const c=e.target.closest("[data-f]");if(c){all=c.dataset.f==="1";$("#pb").innerHTML=draw(D);return}
+    const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
+    if(a==="open")return ordOpen(id);
+    if(a==="ful")return sure("Списати зі складу наявне й записати дохід у касу?",async()=>{if(await act("orders.fulfill",{id},"Замовлення оброблено")){S.bp=loadRef();go("orders")}});
+    sure("Скасувати замовлення?",async()=>{if(await act("orders.status",{id,status:"Скасовано"}))go("orders")})}};
+
+/* ===== 6. Система сповіщень (гілка 82) ===== */
+VIEWS.alerts=v=>{
+  if(!isAdmin()){v.innerHTML='<div class="warn">Доступно лише адміністратору</div>';return}
+  const AC=o=>{const pc=o.repeats?Math.round(o.sent/o.repeats*100):0,cl=o.qty<=0?"er":o.min>0&&o.qty<=o.min?"gd":"ok";
+    return `<div class="card rc"><div class="ch" style="margin:0"><h3>${esc(o.item)}</h3>${sbg(o.status)}</div><div class="meta">${bdg(o.condition,"tl")} ${o.mention?bdg("@"+o.mention,"gd"):""}</div>
+    <div class="rw"><span>📦 Залишок</span><b class="${cl}">${o.qty}${o.min?" / мін. "+o.min:""}</b></div><div class="rw"><span>🔁 Надіслано</span><b>${o.sent} / ${o.repeats}</b></div><span class="bar"><i style="width:${pc}%"></i></span>
+    <div class="meta">⏱ кожні ${o.interval} хв · наступне: ${esc(o.next)}</div>${o.lastError?`<div class="warn">${esc(o.lastError)}</div>`:""}
+    ${ra(o.id,[["restart","▶ Запустити"],["stop","■ Стоп"],["toggle","Вкл/Викл"],["del","Видалити"]])}</div>`};
+  page(v,"Система сповіщень","alerts.list",{},d=>`<div class="scs">${sc("Активні","🔔",d.filter(o=>o.status==="running").length,"надсилають зараз")}${sc("Чекають умови","👁️",d.filter(o=>o.status==="armed").length,"спрацюють самі")}${sc("З помилкою","⚠️",d.filter(o=>o.lastError).length,"перевірте Telegram",d.some(o=>o.lastError)?"er":"ok")}</div>`+(d.length?`<div class="grid">${d.map(AC).join("")}</div>`:'<div class="card empty">Сповіщень немає. Створіть перше.</div>'),`<button class="btn" id="b1">+ Нове сповіщення</button><button class="btn ghost" id="b2">Тест гілки 82</button>`,true);
+  const res=r=>{if(r&&r.ok===false)toast("Telegram: "+(r.error||"помилка"),"er");else toast("Запущено — повідомлення надіслано в гілку 82")};
+  $("#b1").onclick=async()=>{let us=[];try{us=(await api("admin.users")).filter(u=>u.tg&&u.status==="active")}catch(e){}
+    const mf=us.length&&us.length<=9?{k:"mention",l:"Кого тегнути в Telegram",o:[["","Нікого",],...us.map(u=>[u.tg,u.name+" (@"+u.tg+")"])]}:{k:"mention",l:"Кого тегнути (нік TG без @, можна порожньо)"};
+    form("Нове сповіщення",[{k:"item",l:"Предмет",o:allNames()},{k:"condition",l:"Умова запуску",o:[["min","Мін. залишок"],["zero","Предмет відсутній"],["manual","Ручний"]]},mf,{k:"now",l:"Запустити",o:[["0","За умовою / пізніше"],["1","Одразу після збереження"]]},{k:"message",l:"Додатковий текст",t:"area"},{k:"interval",l:"Інтервал, хв",t:"number",v:30},{k:"repeats",l:"Скільки повідомлень у серії",t:"number",v:3},{k:"start",l:"Час старту (Київ), лише для ручного",t:"datetime-local"}],async x=>{const r=await api("alerts.save",x);if(x.now==="1")res(r);go("alerts")})};
+  $("#b2").onclick=async()=>{const b=$("#b2");b.disabled=true;try{await api("admin.tgTest2",{kind:"alert"});toast("Тест надіслано")}catch(e){toast(e.message,"er")}b.disabled=false};
+  v.onclick=async e=>{const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
+    if(a==="del")return sure("Видалити сповіщення?",async()=>{if(await act("alerts.action",{id,op:"del"}))go("alerts")});
+    b.disabled=true;try{const r=await api("alerts.action",{id,op:a});if(a==="restart")res(r);else toast("Готово");go("alerts")}catch(x){toast(x.message,"er");b.disabled=false}};
+  api("alerts.history").then(h=>{if(v.isConnected)v.insertAdjacentHTML("beforeend",`<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">Історія відправлення</h3>${tbl([["time","Час"],["item","Предмет"],["n","№"],["status","Статус",o=>sbg(o.status)],["error","Помилка"]],h)}</div>`)}).catch(()=>{})};
+
+/* ===== 7. Новорічний декор: льодяники, пряники, цукрові тростини, ялинка, віночок ===== */
+const st=document.createElement("style");st.textContent=`
+#xm{position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden}
+.xs{position:absolute;top:-90px;animation:xfall var(--d) linear infinite;animation-delay:var(--l);will-change:transform}
+.xs svg{width:100%;display:block;animation:xsp var(--s) ease-in-out infinite alternate;filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))}
+@keyframes xfall{to{transform:translate3d(var(--dx),118vh,0)}}
+@keyframes xsp{from{transform:rotate(-28deg)}to{transform:rotate(28deg)}}
+#xt{position:fixed;right:140px;bottom:0;width:104px;z-index:4;pointer-events:none}
+#xw{position:fixed;top:2px;right:76px;width:62px;z-index:74;pointer-events:none}
+.xl{animation:xbl 1.3s ease-in-out infinite alternate;animation-delay:var(--d)}
+@keyframes xbl{from{opacity:.25}to{opacity:1}}
+html:not(.ny) #xm,html:not(.ny) #xt,html:not(.ny) #xw,html.hp #xm,html.hp #xt,html.hp #xw,html.lite #xm{display:none!important}
+@media(max-width:1000px){#xt{display:none}}
+`;document.head.append(st);
+const rnd=(a,b)=>a+Math.random()*(b-a),COL=["#ff4d5e","#ffd36b","#43e08f","#5ec8ff","#ff8ad0","#ff9a2e"];
+const SP=[
+ (a,b)=>`<svg viewBox="0 0 40 80"><rect x="18" y="34" width="4" height="44" rx="2" fill="#f4ecd8"/><circle cx="20" cy="20" r="17" fill="${a}"/><circle cx="20" cy="20" r="11" fill="none" stroke="${b}" stroke-width="4" stroke-dasharray="14 7"/><circle cx="20" cy="20" r="4" fill="${b}"/></svg>`,
+ ()=>`<svg viewBox="0 0 32 80"><path d="M26 78V26a10 10 0 0 0-20 0" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M26 78V26a10 10 0 0 0-20 0" fill="none" stroke="#e0243a" stroke-width="8" stroke-dasharray="6 7"/></svg>`,
+ ()=>`<svg viewBox="0 0 50 60"><g fill="#b8743a"><circle cx="25" cy="10" r="9"/><rect x="14" y="18" width="22" height="22" rx="8"/><rect x="2" y="19" width="16" height="9" rx="4.5"/><rect x="32" y="19" width="16" height="9" rx="4.5"/><rect x="13" y="36" width="10" height="20" rx="5"/><rect x="27" y="36" width="10" height="20" rx="5"/></g><circle cx="21" cy="9" r="1.4" fill="#fff"/><circle cx="29" cy="9" r="1.4" fill="#fff"/><path d="M21 13q4 3 8 0" stroke="#fff" fill="none" stroke-width="1.4"/><circle cx="25" cy="25" r="2" fill="#e24a5a"/><circle cx="25" cy="32" r="2" fill="#43e08f"/><path d="M3 24h13M34 24h13" stroke="#fff" stroke-width="1.4" stroke-dasharray="2 3"/></svg>`];
+const xm=document.createElement("div");xm.id="xm";xm.setAttribute("aria-hidden","true");
+for(let i=0;i<12;i++){const e=document.createElement("div"),sz=rnd(26,46);e.className="xs";e.style.cssText=`left:${rnd(0,96).toFixed(1)}%;width:${sz.toFixed(0)}px;--d:${rnd(22,40).toFixed(1)}s;--l:-${rnd(0,40).toFixed(1)}s;--s:${rnd(2.5,5).toFixed(1)}s;--dx:${rnd(-120,120).toFixed(0)}px`;
+  e.innerHTML=SP[i%3](COL[i%6],COL[(i+2)%6]);xm.append(e)}
+document.body.append(xm);
+const xt=document.createElement("div");xt.id="xt";
+xt.innerHTML=`<svg viewBox="0 0 120 190"><path d="M60 8l8 18 20 2-15 13 5 20-18-10-18 10 5-20-15-13 20-2z" fill="#ffd36b"/><path d="M60 34L26 92h68z" fill="#1f7a45"/><path d="M60 70L16 140h88z" fill="#18683b"/><path d="M60 108L6 176h108z" fill="#145a33"/><rect x="52" y="174" width="16" height="14" fill="#6b4423"/><path d="M40 78Q60 90 80 78M30 112Q60 128 90 112M20 148Q60 168 100 148" fill="none" stroke="#ffd36b" stroke-width="1.5"/>${[[48,70],[72,66],[34,106],[64,100],[86,108],[24,144],[56,140],[90,150],[40,166]].map(([x,y],i)=>`<circle class="xl" cx="${x}" cy="${y}" r="3.6" fill="${COL[i%6]}" style="--d:-${(i*.27).toFixed(2)}s"/>`).join("")}</svg>`;
+document.body.append(xt);
+const xw=document.createElement("div");xw.id="xw";
+xw.innerHTML=`<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="28" fill="none" stroke="#1f7a45" stroke-width="12"/><circle cx="40" cy="40" r="28" fill="none" stroke="#2fa35f" stroke-width="5" stroke-dasharray="3 5"/>${[0,1,2,3,4,5,6].map(i=>{const a=i*.9;return`<circle class="xl" cx="${(40+28*Math.cos(a)).toFixed(1)}" cy="${(40+28*Math.sin(a)).toFixed(1)}" r="3" fill="${i%2?"#ff4d5e":"#ffd36b"}" style="--d:-${i*.2}s"/>`}).join("")}<path d="M40 62l-12 14M40 62l12 14" stroke="#c81f33" stroke-width="5" stroke-linecap="round"/><circle cx="40" cy="62" r="6" fill="#e0243a"/></svg>`;
+document.body.append(xw);
+/* дзвіночки при успішних діях у новорічній темі */
+const _sfx=sfx;sfx=function(t){_sfx(t);if(!R.classList.contains("ny")||!AU.sfx||t!=="done")return;
+  try{[784,988,1175,1568].forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain(),n=actx.currentTime+i*.09;o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(.05,n);g.gain.exponentialRampToValueAtTime(.001,n+.7);o.connect(g);g.connect(actx.destination);o.start(n);o.stop(n+.7)})}catch(e){}};
+})();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
 function endSession(msg){sfx("sys");
