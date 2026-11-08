@@ -1996,233 +1996,335 @@ TABS.look=function(b){_look(b);try{
 /* діагностика: якщо щось зламається, побачите повідомлення */
 let ec=0;addEventListener("error",e=>{if(ec++<3&&key())try{toast("Помилка скрипта: "+(e.message||"?")+" ("+(e.lineno||0)+")","er")}catch(x){}});
 })();
-  /*PATCH_V6_UI — вставити ПЕРЕД рядком: /* ===== авторизація та сесія ===== */
+  /*PATCH_V6_A — вкладки, ролі, замовлення трав, сповіщення, налаштування*/
 (function(){
 "use strict";
 const R=document.documentElement;
-const LS=(k,v)=>{try{if(v===undefined)return localStorage.getItem(k);localStorage.setItem(k,v)}catch(e){return null}};
-
-/* ===== 1. Прибрати вкладки ===== */
-["plan","bank","prices","buy","goods"].forEach(id=>{const i=PAGES.findIndex(p=>p[0]===id);if(i>=0)PAGES.splice(i,1)});
-["plan","bank","prices","buy","goods"].forEach(k=>delete NP[k]);
-Object.assign(NP,{home:"home",log:"log",tax:"tax",calc:"craft",scheme:"craft",craft:"craft",herbs:"herbs",stock:"stock",orders:"orders"});
+/* ---------- 1. прибрані вкладки й нові права ---------- */
+const GONE=["goods","buy","bank","plan","prices"];
+GONE.forEach(id=>{const i=PAGES.findIndex(p=>p[0]===id);if(i>=0)PAGES.splice(i,1);delete NP[id]});
+Object.assign(NP,{home:"home",calc:"craft",scheme:"craft",log:"log",tax:"tax"});
 PERMS.length=0;
-PERMS.push(["home","Головна"],["stock","Склад: перегляд"],["stock_edit","Склад: зміни"],["craft","Крафт і схеми"],["herbs","Замовлення трав"],["orders","Оптові замовлення"],["log","Журнал"],["tax","Податок"]);
-const PN=Object.fromEntries(PERMS);
-const allowed=id=>{const p=PAGES.find(x=>x[0]===id);if(!p)return false;if(isAdmin())return true;if(id==="profile")return true;if(id==="alerts"||id==="admin")return false;return !NP[id]||(S.user.perms||"").split(",").includes(NP[id])};
-const _sa=showApp;showApp=function(){const h=location.hash.slice(1)||"home";if(!allowed(h)){const f=PAGES.find(p=>allowed(p[0]));location.hash=f?f[0]:"profile"}return _sa.apply(this,arguments)};
-/* зміна ролі підхоплюється без перезаходу */
+[["home","Головна"],["craft","Крафт, підрахунок, схема"],["stock","Склад: перегляд"],["stock_edit","Склад: зміни"],["herbs","Замовлення трав"],["orders","Оптові замовлення"],["log","Журнал операцій"],["tax","Податок"]].forEach(x=>PERMS.push(x));
+const pm=()=>String((S.user&&S.user.perms)||"").split(",").map(s=>s.trim());
+const allowed=id=>{if(id==="profile")return true;if(id==="alerts"||id==="admin")return isAdmin();return !NP[id]||isAdmin()||pm().includes(NP[id])};
+const _go=go;
+go=function(id){if(GONE.includes(id)||!PAGES.some(p=>p[0]===id)||!allowed(id)){const f=PAGES.find(p=>allowed(p[0]));id=f?f[0]:"profile"}return _go(id)};
 const _api=api;
 api=async function(a,d){const r=await _api(a,d);
-  if(a==="ping"&&r&&r.me&&S.user&&r.me.perms!==S.user.perms){S.user.perms=r.me.perms;buildNav();const h=location.hash.slice(1);document.querySelectorAll("#nl a").forEach(x=>x.classList.toggle("on",x.dataset.p===h));if(!allowed(h)){const f=PAGES.find(p=>allowed(p[0]));if(f)go(f[0])}}
+  if(a==="ping"&&r&&r.me&&S.user&&r.me.perms!==S.user.perms){S.user.perms=r.me.perms;S.user.roleName=r.me.roleName;buildNav();const cur=location.hash.slice(1)||"home";document.querySelectorAll("#nl a").forEach(x=>x.classList.toggle("on",x.dataset.p===cur));if(!allowed(cur))go("home");toast("Ваші права змінено адміністратором")}
   return r};
+prefetch=async function(){if(!CONFIG.API_URL||S.preview||!allowed("stock"))return;await new Promise(r=>setTimeout(r,3000));try{S.c["inventory.list{}"]=await api("inventory.list",{})}catch(e){}};
 
-/* ===== 2. Користувачі: Telegram + роль (додаємо поля у наявні форми) ===== */
+/* ---------- 2. замовлення трав ---------- */
+const fmtD=s=>{const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/);return m?m[3]+"."+m[2]+"."+m[1]:"—"};
+const dLeft=s=>{const m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})/);if(!m)return null;return Math.ceil((new Date(+m[1],+m[2]-1,+m[3],23,59,59)-Date.now())/864e5)};
+const tgn=s=>{s=String(s||"").replace(/^@/,"");return s?"@"+s:""};
+let HF="all";
+const dueBadge=o=>{if(o.status!=="Замовлено")return"";const n=dLeft(o.due);if(n===null)return"";return n<0?bdg("прострочено","er"):n===0?bdg("сьогодні останній день","wr"):n<=2?bdg("ще "+n+" дн.","wr"):bdg("ще "+n+" дн.","tl")};
+VIEWS.herbs=function(v){
+  let D=[];
+  const card=o=>`<div class="card hb ${o.late?"late":""}"><div class="hb-h"><div class="hb-s"><i>🌿</i><div><b>${esc(o.supplier)}</b><small class="meta" style="display:block">${o.supplierTg?esc(tgn(o.supplierTg)):"без Telegram"}</small></div></div>${sbg(o.status==="Замовлено"?"Очікує виконання":o.status)}</div>
+    <div class="hb-m"><span>№${esc(o.num)}</span><span>оформив ${esc(o.user)} · ${esc(o.time)}</span></div>
+    <div class="hb-d"><span>⏳ виконати до <b>${fmtD(o.due)}</b></span>${dueBadge(o)}</div>
+    <div class="hb-i">${o.items.map(x=>`<div><span>${esc(x.name)} <small class="meta">× ${x.qty}</small></span><b>${money(x.qty*x.price)}</b></div>`).join("")}</div>
+    <div class="hb-t"><span class="meta">${o.count} од. · ${o.items.length} поз.</span><b class="gd" style="font-size:19px">${money(o.total)}</b></div>
+    ${o.note?`<div class="meta">📝 ${esc(o.note)}</div>`:""}
+    ${o.status==="Замовлено"?ra(o.id,[["rcv","✔ Отримано"],["rem","🔔 Нагадати в Telegram"],["cnl","Скасувати"]]):""}</div>`;
+  const body=d=>{D=d;const pe=d.filter(o=>o.status==="Замовлено"),late=pe.filter(o=>o.late),dn=d.filter(o=>o.status==="Отримано");
+    const f=d.filter(o=>HF==="all"||(HF==="wait"&&o.status==="Замовлено")||(HF==="late"&&o.late)||(HF==="done"&&o.status==="Отримано")||(HF==="cancel"&&o.status==="Скасовано"));
+    return`<div class="scs">${sc("Очікують","⏳",pe.length,money(pe.reduce((a,o)=>a+o.total,0))+" до оплати")}${sc("Прострочені","🚨",late.length,"потребують уваги",late.length?"er":"ok")}${sc("Отримано","📦",dn.length,"замовлень","ok")}${sc("Витрачено","💸",money(dn.reduce((a,o)=>a+o.total,0)),"на трави та сировину","er")}</div>
+    <div class="chips">${[["all","Усі"],["wait","Очікують"],["late","Прострочені"],["done","Отримані"],["cancel","Скасовані"]].map(x=>`<span class="chip ${HF===x[0]?"on":""}" data-hf="${x[0]}">${x[1]}</span>`).join("")}</div>
+    ${f.length?`<div class="hbs">${f.map(card).join("")}</div>`:'<div class="card empty">Тут поки порожньо. Натисніть «Нове замовлення».</div>'}`};
+  page(v,"Замовлення трав","herb.list",{},body,`<button class="btn" id="b1">+ Нове замовлення</button>`,true);
+  $("#b1").onclick=herbForm2;
+  v.onclick=e=>{const c=e.target.closest("[data-hf]");if(c){HF=c.dataset.hf;if(S.c["herb.list{}"])$("#pb").innerHTML=body(S.c["herb.list{}"]);return}
+    const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
+    if(a==="rcv")return sure("Підтвердити отримання? Трави надійдуть на склад, сума спишеться з каси, у чат піде повідомлення.",async()=>{if(await act("herb.receive",{id},"Отримано: склад оновлено")){S.bp=loadRef();go("herbs")}});
+    if(a==="rem")return act("herb.remind",{id},"Нагадування надіслано в Telegram");
+    sure("Скасувати замовлення? У чат піде повідомлення про скасування.",async()=>{if(await act("herb.cancel",{id}))go("herbs")})};
+};
+async function herbForm2(){
+  let sup=[];try{sup=await api("herb.suppliers")}catch(e){}
+  const hs=herbSet(),rn=rawNames(),op=a=>a.map(n=>`<option>${esc(n)}</option>`).join("");
+  const opts=`<optgroup label="Лікувальні трави">${op(rn.filter(n=>hs.has(n)))}</optgroup><optgroup label="Інша сировина">${op(rn.filter(n=>!hs.has(n)))}</optgroup>`;
+  const row=()=>`<div class="orow"><select class="hi">${opts}</select><input class="hq" type="number" min="1" value="10"><input class="hp" type="number" min="0" step="0.01" placeholder="Ціна $"><button type="button" class="btn ghost hrm">✕</button></div>`;
+  const iso=ms=>new Date(ms-new Date().getTimezoneOffset()*6e4).toISOString().slice(0,10),today=iso(Date.now());
+  const m=pnl(`<div class="ph2"><h3>🌿 Нове замовлення трав</h3><button class="btn ghost x">✕</button></div>
+  <div class="hsec"><h4>1 · КОМУ ЗАМОВЛЯЄМО</h4><select id="hsup">${sup.map(s=>`<option value="${esc(s.id)}">${esc(s.name)} — @${esc(s.tg)}${s.role?" · "+esc(s.role):""}</option>`).join("")}<option value="">Інший постачальник…</option></select>
+  <div id="hman" class="${sup.length?"hide":""}"><div class="row"><div><label>Ім'я</label><input id="hnm"></div><div><label>Telegram (без @)</label><input id="htg" placeholder="username"></div></div></div>
+  <p class="meta" id="hsi" style="margin-top:6px"></p></div>
+  <div class="hsec"><h4>2 · ДО ЯКОГО ЧИСЛА</h4><div class="stp"><input id="hdd" type="date" min="${today}" value="${iso(Date.now()+3*864e5)}" style="width:160px;text-align:left"><button type="button" class="btn ghost" data-dd="1">завтра</button><button type="button" class="btn ghost" data-dd="3">+3 дні</button><button type="button" class="btn ghost" data-dd="7">+тиждень</button><button type="button" class="btn ghost" data-dd="14">+2 тижні</button></div></div>
+  <div class="hsec"><h4>3 · ЩО ЗАМОВЛЯЄМО <small class="meta">(предмет · кількість · ціна за од.)</small></h4><div id="hrows">${row()}</div><button type="button" class="btn ghost" id="hadd" style="margin-top:6px">+ Додати позицію</button>
+  <div class="rw" style="margin-top:10px"><span id="hinfo" class="meta"></span><b class="gd" id="htot"></b></div></div>
+  <div class="hsec"><h4>4 · КОМЕНТАР</h4><textarea id="hc" rows="2" placeholder="Необов'язково"></textarea></div>
+  <div class="hsec"><h4>ТАК ПОБАЧИТЬ ЧАТ (гілка замовлень)</h4><div class="hpv" id="hpv"></div></div>
+  <div class="err" id="fe"></div><div class="acts"><button class="btn big" id="fs">Замовити й повідомити в Telegram</button><button class="btn ghost x">Скасувати</button></div>`);
+  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
+  const rows=()=>[...m.querySelectorAll(".orow")],g=s=>m.querySelector(s);
+  const fill=r=>{const p=S.prices[r.querySelector(".hi").value];if(p!=null&&!r.querySelector(".hp").value)r.querySelector(".hp").value=p};
+  const who=()=>{const id=g("#hsup").value;if(id){const s=sup.find(x=>x.id===id);return{id,name:s.name,tg:s.tg}}return{id:"",name:g("#hnm").value.trim(),tg:g("#htg").value.trim().replace(/^@/,"")}};
+  const items=()=>rows().map(r=>({name:r.querySelector(".hi").value,qty:+r.querySelector(".hq").value,price:r.querySelector(".hp").value}));
+  const upd=()=>{const w=who(),it=items(),tot=it.reduce((a,x)=>a+(x.qty||0)*(+x.price||0),0),u=it.reduce((a,x)=>a+(x.qty||0),0);
+    g("#hman").classList.toggle("hide",!!g("#hsup").value);
+    g("#hsi").textContent=w.tg?"Бот згадає @"+w.tg+" у чаті":"⚠ Telegram не вказано — повідомлення прийде без тегу";
+    g("#hinfo").textContent=it.length+" поз. · "+u+" од.";g("#htot").textContent="Разом: "+money(tot);
+    const d=g("#hdd").value;
+    g("#hpv").textContent="🌿 НОВЕ ЗАМОВЛЕННЯ ТРАВ\n\n👤 Постачальник: "+(w.tg?"@"+w.tg+" ("+w.name+")":w.name||"—")+"\n⏳ Виконати до: "+fmtD(d)+"\n\n📦 Що потрібно:\n"+it.map((x,i)=>(i+1)+". "+x.name+" — "+x.qty+" шт × "+money(+x.price||0)+" = "+money((x.qty||0)*(+x.price||0))).join("\n")+"\n\n💰 Разом: "+money(tot)+" · одиниць: "+u+"\n✍️ Оформив: "+((S.user&&S.user.name)||"")+(g("#hc").value?"\n📝 "+g("#hc").value:"")};
+  g("#hadd").onclick=()=>{g("#hrows").insertAdjacentHTML("beforeend",row());fill(rows().pop());upd()};
+  m.addEventListener("change",e=>{if(e.target.classList.contains("hi")){const r=e.target.closest(".orow");r.querySelector(".hp").value="";fill(r)}upd()});
+  m.addEventListener("input",upd);
+  m.addEventListener("click",e=>{const b=e.target.closest(".hrm"),d=e.target.closest("[data-dd]");
+    if(b&&rows().length>1){b.closest(".orow").remove();upd()}
+    if(d){g("#hdd").value=iso(Date.now()+ +d.dataset.dd*864e5);upd()}});
+  fill(rows()[0]);upd();
+  const sb=g("#fs");
+  sb.onclick=async()=>{const w=who(),it=items(),fe=g("#fe");
+    if(!w.name){fe.textContent="Вкажіть постачальника";return}
+    if(!g("#hdd").value){fe.textContent="Вкажіть дату";return}
+    if(it.some(i=>!(i.qty>0))){fe.textContent="Кількість має бути більшою за 0";return}
+    if(it.some(i=>i.price===""||!(+i.price>=0))){fe.textContent="Вкажіть ціну за одиницю для кожної позиції";return}
+    sb.disabled=true;sb.innerHTML='<span class="spin"></span>Надсилаю…';
+    try{const r=await api("herb.save",{supplierId:w.id,supplier:w.name,tg:w.tg,due:g("#hdd").value,note:g("#hc").value,items:it.map(i=>({...i,price:+i.price}))});
+      m.remove();go("herbs");
+      if(r&&r.tg)toast(r.tagged?"Замовлення створено, постачальника згадано в Telegram":"Замовлення створено, повідомлення надіслано в чат");
+      else toast("Замовлення збережено, але Telegram: "+((r&&r.tgError)||"помилка"),"er")}
+    catch(x){fe.textContent=x.message;sb.disabled=false;sb.textContent="Замовити й повідомити в Telegram"}};
+}
+
+/* ---------- 3. користувачі: Telegram і роль ---------- */
 let ROLES=[];
-const loadRoles=()=>_api("admin.roles",{}).then(r=>{ROLES=r||[]}).catch(()=>{});
 const _form=form;
 form=function(title,fields,done){
   if(/^(Новий користувач|Редагування: )/.test(title)){
-    const edit=title.startsWith("Редагування: "),L=S.c["admin.users{}"]||[],o=edit?L.find(u=>u.name===title.slice(13)):null,i=fields.findIndex(f=>f.k==="login");
-    const ex=[{k:"tg",l:"Telegram (ім’я користувача без @) — для тегу в чаті",v:o?.tg||""},
-      {k:"roleId",l:"Роль (набір прав на сайті)",o:[["","Без ролі (ручні права нижче)"],...ROLES.map(r=>[r.id,r.name])],v:o?.roleId||""}];
-    fields=[...fields.slice(0,i+1),...ex,...fields.slice(i+1)];
+    const edit=title.indexOf("Редагування: ")===0,L=S.c["admin.users{}"]||[],u=edit?L.find(x=>x.name===title.slice(13)):null;
+    fields=fields.slice();const i=fields.findIndex(f=>f.k==="skill");
+    fields.splice(i>=0?i+1:fields.length,0,{k:"tg",l:"Telegram-ім'я без @ (бот згадуватиме у чаті)",v:u?u.tg:""},{k:"roleId",l:"Роль (визначає, що бачить користувач)",o:[["","Без ролі — окремі права нижче"],...ROLES.map(r=>[r.id,r.name])],v:u?(u.roleId||""):""});
   }
   return _form(title,fields,done)};
-const _tu=TABS.users;TABS.users=b=>{loadRoles();return _tu(b)};
+const deco=b=>{const run=()=>{const t=b.querySelector("table");if(!t||t.dataset.hpx)return;const L=S.c["admin.users{}"];if(!L)return;t.dataset.hpx=1;const map={};L.forEach(u=>map[u.id]=u);
+  t.rows[0].insertAdjacentHTML("beforeend","<th>Telegram / Роль</th>");
+  [...t.rows].slice(1).forEach(r=>{const bt=r.querySelector("[data-id]"),u=bt&&map[bt.dataset.id];r.insertAdjacentHTML("beforeend","<td>"+(u?(u.tg?"@"+esc(u.tg):"—")+"<br><small class='meta'>"+esc(u.roleName||"без ролі")+"</small>":"")+"</td>")})};
+  const mo=new MutationObserver(run);mo.observe(b,{childList:true,subtree:true});run();setTimeout(()=>mo.disconnect(),20000)};
+const _users=TABS.users;
+TABS.users=function(b){api("admin.roles").then(r=>{ROLES=r||[]}).catch(()=>{});_users(b);deco(b)};
 
-/* ===== 3. Ролі ===== */
-TABS.roles=b=>{let L=[];
-  const F=o=>[{k:"name",l:"Назва ролі (наприклад: Травник)",v:o?.name},{k:"perms",l:"Що дозволено бачити й робити",m:PERMS,v:(o?.perms||"").split(",").filter(Boolean)}];
-  page(b,"Ролі та права","admin.roles",{},d=>{L=d;ROLES=d;return `<p class="meta" style="margin-bottom:10px">Роль визначає, які вкладки бачить користувач. Призначається в «Користувачі → Змінити». Зміна діє за кілька секунд без перезаходу.</p>`+tbl([["name","Роль",o=>`<b>${esc(o.name)}</b>`],["perms","Права",o=>o.perms?o.perms.split(",").map(p=>bdg(PN[p]||p,"tl")).join(" "):bdg("лише профіль","mu")],["users","Користувачів"],["a","",o=>ra(o.id,[["edit","Змінити"],["del","Видалити"]])]],d)},`<button class="btn" id="b1">+ Нова роль</button>`);
-  $("#b1").onclick=()=>form("Нова роль",F(),async x=>{await api("admin.roleSave",x);VIEWS.admin($("#view"))});
+/* ---------- 4. ролі ---------- */
+TABS.roles=function(b){let L=[];
+  const F=o=>[{k:"name",l:"Назва ролі (наприклад: Травник)",v:o&&o.name},{k:"perms",l:"Що дозволено бачити й робити",m:PERMS,v:((o&&o.perms)||"").split(",").filter(Boolean)}];
+  page(b,"Ролі та права","admin.roles",{},d=>{L=d;return tbl([["name","Роль",o=>`<b>${esc(o.name)}</b>`],["perms","Бачить і може",o=>o.perms?o.perms.split(",").map(p=>bdg((PERMS.find(x=>x[0]===p)||[p,p])[1],"tl")).join(" "):bdg("лише профіль","mu")],["users","Користувачів"],["a","",o=>ra(o.id,[["edit","Змінити"],["del","Видалити"]])]],d)+`<p class="meta" style="margin-top:12px">Роль призначається в «Користувачі → Змінити». Права застосовуються миттєво — меню в користувача оновиться за кілька секунд. Адміністратори завжди бачать усе.</p>`},`<button class="btn" id="b1">+ Нова роль</button>`);
+  $("#b1").onclick=()=>form("Нова роль",F(),async x=>{await api("admin.roleSave",x);go("admin")});
   rowAct(b,async(a,id)=>{const o=L.find(r=>r.id===id);if(!o)return;
-    if(a==="edit")return form("Роль: "+o.name,F(o),async x=>{await api("admin.roleSave",{...x,id});VIEWS.admin($("#view"))});
-    sure("Видалити роль «"+o.name+"»?",async()=>{if(await act("admin.roleDelete",{id}))VIEWS.admin($("#view"))})})};
-VIEWS.admin=v=>{
-  if(!isAdmin()){v.innerHTML='<div class="warn">Доступ заборонено</div>';return}
-  const T={over:"Огляд",users:"Користувачі",roles:"Ролі",sess:"Сесії",items:"Предмети",recipes:"Рецепти",pay:"Нарахування",fix:"Відновлення",logs:"Журнал",look:"Вигляд",tg:"Telegram",maint:"Рестарти",settings:"Налаштування",sheets:"Таблиці БД"};
-  if(!T[AT])AT="over";
-  v.innerHTML=`<div class="chips">${Object.entries(T).map(([k,l])=>`<span class="chip ${k===AT?"on":""}" data-t="${k}">${l}</span>`).join("")}</div><div id="at"></div>`;
-  v.onclick=e=>{const t=e.target.dataset.t;if(t){AT=t;VIEWS.admin(v)}};
-  TABS[AT]($("#at"))};
-const _tg=TABS.tg;
-TABS.tg=b=>{_tg(b);
-  b.insertAdjacentHTML("afterbegin",`<div class="card" style="margin-bottom:14px"><div class="ch"><h3>Гілки чату</h3></div><div class="rw"><span>🌿 Замовлення трав — гілка 79</span><button class="btn ghost" data-tt="herb">Тест</button></div><div class="rw"><span>🔔 Сповіщення — гілка 82</span><button class="btn ghost" data-tt="alert">Тест</button></div></div>`);
-  b.onclick=async e=>{const t=e.target.closest("[data-tt]");if(!t)return;t.disabled=true;try{await api("admin.tgTest2",{kind:t.dataset.tt});toast("Тест надіслано")}catch(x){toast(x.message,"er")}t.disabled=false}};
+    if(a==="edit")return form("Роль: "+o.name,F(o),async x=>{await api("admin.roleSave",{...x,id});go("admin")});
+    sure("Видалити роль «"+o.name+"»?",async()=>{if(await act("admin.roleDelete",{id}))go("admin")})})};
+const _adm=VIEWS.admin;
+VIEWS.admin=function(v){_adm(v);const ch=v.querySelector(".chips");if(ch&&!ch.querySelector('[data-t="roles"]'))ch.insertAdjacentHTML("beforeend",`<span class="chip ${AT==="roles"?"on":""}" data-t="roles">Ролі</span>`)};
 
-/* ===== 4. Замовлення трав ===== */
-const dmy=s=>String(s||"").split("-").reverse().join(".");
-const dueB=o=>{if(!o.due)return"";if(o.status!=="Замовлено")return"";if(o.late)return bdg("Прострочено","er");
-  const n=Math.ceil((new Date(o.due+"T23:59:59").getTime()-Date.now())/864e5);return n<=1?bdg("Сьогодні/завтра","wr"):bdg("Ще "+n+" дн.","ok")};
-async function herbNew(){
-  let SUP=[];try{SUP=(await api("herb.suppliers"))||[]}catch(e){}
-  const hs=herbSet(),rw=rawNames(),op=a=>a.map(n=>`<option>${esc(n)}</option>`).join(""),
-    opts=`<optgroup label="Лікувальні трави">${op(rw.filter(n=>hs.has(n)))}</optgroup><optgroup label="Інша сировина">${op(rw.filter(n=>!hs.has(n)))}</optgroup>`,
-    row=()=>`<div class="orow"><select class="hi">${opts}</select><input class="hq" type="number" min="1" value="10"><input class="hp" type="number" min="0" step="0.01" placeholder="Ціна $"><button type="button" class="btn ghost hrm">✕</button></div>`,
-    d3=new Date(Date.now()+3*864e5).toISOString().slice(0,10),td=new Date().toISOString().slice(0,10);
-  const m=pnl(`<div class="ph2"><h3>🌿 Нове замовлення трав</h3><button class="btn ghost x">✕</button></div>
-  <label>Постачальник (його тегнуть у Telegram)</label><select id="hsup">${SUP.map(u=>`<option value="${esc(u.id)}">${esc(u.name)} · @${esc(u.tg)}</option>`).join("")}<option value="">Інший — ввести вручну</option></select>
-  <div id="hman" class="${SUP.length?"hide":""}">${SUP.length?"":'<div class="note">Немає користувачів з Telegram. Додайте нік в Адмін-панель → Користувачі.</div>'}<label>Ім’я постачальника</label><input id="hsn"><label>Telegram (без @, для тегу)</label><input id="hst"></div>
-  <label>Виконати до</label><input id="hdu" type="date" value="${d3}" min="${td}">
-  <label>Позиції (предмет · кількість · ціна за од.)</label><div id="hrows">${row()}</div><button type="button" class="btn ghost" id="hadd" style="margin-top:6px">+ Додати позицію</button>
-  <div class="rw" style="margin-top:10px"><span id="hinfo" class="meta"></span><b class="er" id="htot"></b></div>
-  <label>Коментар</label><textarea id="hc" rows="2"></textarea><p class="meta" style="margin-top:8px">📨 Після збереження в гілку 79 піде повідомлення з усіма деталями й тегом постачальника.</p>
-  <div class="err" id="fe"></div><div class="acts"><button class="btn" id="fs">Замовити</button><button class="btn ghost x">Скасувати</button></div>`);
-  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
-  const rows=()=>[...m.querySelectorAll(".orow")];
-  const fill=r=>{const p=S.prices[r.querySelector(".hi").value];r.querySelector(".hp").value=p!=null?p:""};
-  const tot=()=>{let s=0,u=0;rows().forEach(r=>{const q=+r.querySelector(".hq").value||0;u+=q;s+=q*(+r.querySelector(".hp").value||0)});$("#hinfo",m).textContent=rows().length+" поз. · "+u+" од.";$("#htot",m).textContent="Разом: "+money(s)};
-  $("#hadd",m).onclick=()=>{$("#hrows",m).insertAdjacentHTML("beforeend",row());fill(rows().pop());tot()};
-  m.addEventListener("change",e=>{if(e.target.id==="hsup")$("#hman",m).classList.toggle("hide",!!e.target.value);if(e.target.classList.contains("hi"))fill(e.target.closest(".orow"));tot()});
-  m.addEventListener("input",e=>{if(e.target.matches(".hq,.hp"))tot()});
-  m.addEventListener("click",e=>{const b=e.target.closest(".hrm");if(b&&rows().length>1){b.closest(".orow").remove();tot()}});
-  fill(rows()[0]);tot();
-  const sb=$("#fs",m),er=t=>{$("#fe",m).textContent=t};
-  sb.onclick=async()=>{
-    const sid=$("#hsup",m).value,items=rows().map(r=>({name:r.querySelector(".hi").value,qty:+r.querySelector(".hq").value,price:r.querySelector(".hp").value}));
-    if(!sid&&!$("#hsn",m).value.trim())return er("Вкажіть постачальника");
-    if(!$("#hdu",m).value)return er("Вкажіть дату виконання");
-    if(items.some(i=>!(i.qty>0)))return er("Кількість має бути більшою за 0");
-    if(items.some(i=>i.price===""||!(+i.price>=0)))return er("Вкажіть ціну для кожної позиції");
-    sb.disabled=true;er("");
-    try{const r=await api("herb.save",{supplierId:sid,supplier:$("#hsn",m).value,tg:$("#hst",m).value,due:$("#hdu",m).value,note:$("#hc",m).value,items:items.map(i=>({...i,price:+i.price}))});
-      m.remove();
-      if(r&&r.tg)toast("Замовлення створено, повідомлення надіслано"+(r.tagged?" з тегом":" (без тегу — немає ніка TG)"));else toast("Створено, але Telegram: "+((r&&r.tgError)||"помилка"),"er");
-      go("herbs")}
-    catch(e){er(e.message);sb.disabled=false}};
-}
-VIEWS.herbs=v=>{
-  let D=[],f="act";
-  const stt=o=>o.status==="Замовлено"?"Очікує виконання":o.status;
-  const card=o=>`<div class="card rc"><div class="ch" style="margin:0"><h3>№${esc(o.num)}</h3>${sbg(stt(o))}</div>
-    <div class="meta">🌿 <b>${esc(o.supplier)}</b>${o.supplierTg?` · <b class="gd">@${esc(o.supplierTg)}</b>`:' · <span class="er">без тегу</span>'}</div>
-    <div class="meta">📅 ${esc(o.time)} · ✍️ ${esc(o.user)}</div>
-    <div class="rw"><span>⏳ Виконати до</span><span><b>${dmy(o.due)}</b> ${dueB(o)}</span></div>
-    ${o.items.map(x=>`<div class="ing"><span>${esc(x.name)} ×${x.qty}</span><span>${money(x.price*x.qty)}</span></div>`).join("")}
-    <div class="rw"><span>Разом · ${o.count} од.</span><b class="gd">${money(o.total)}</b></div>${o.note?`<div class="meta">📝 ${esc(o.note)}</div>`:""}
-    ${o.status==="Замовлено"?ra(o.id,[["rcv","✅ Отримано"],["rem","🔔 Нагадати"],["cnl","Скасувати"]]):""}</div>`;
-  const draw=d=>{D=d;const pe=d.filter(o=>o.status==="Замовлено"),late=pe.filter(o=>o.late),dn=d.filter(o=>o.status==="Отримано"),
-    l=f==="act"?pe:f==="done"?dn:d.filter(o=>o.status==="Скасовано");
-    return `<div class="scs">${sc("Очікують","⏳",pe.length,money(pe.reduce((a,o)=>a+o.total,0))+" до оплати")}${sc("Прострочені","🚨",late.length,"потрібне нагадування",late.length?"er":"ok")}${sc("Отримано","📦",dn.length,"замовлень","ok")}${sc("Витрачено","💸",money(dn.reduce((a,o)=>a+o.total,0)),"на трави й сировину","er")}</div>
-    <div class="chips">${[["act","⏳ Активні"],["done","✅ Отримані"],["cnl","❌ Скасовані"]].map(([k,t])=>`<span class="chip ${f===k?"on":""}" data-f="${k}">${t}</span>`).join("")}</div>
-    ${l.length?`<div class="grid">${l.map(card).join("")}</div>`:'<div class="card empty">Тут поки порожньо</div>'}`};
-  page(v,"Замовлення трав","herb.list",{},draw,`<button class="btn" id="b1">+ Нове замовлення</button>`,true);
-  $("#b1").onclick=herbNew;
-  v.onclick=e=>{const c=e.target.closest("[data-f]");if(c){f=c.dataset.f;$("#pb").innerHTML=draw(D);return}
-    const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
-    if(a==="rem")return act("herb.remind",{id},"Нагадування надіслано в Telegram");
-    if(a==="rcv")return sure("Підтвердити отримання? Товар надійде на склад, сума спишеться з каси.",async()=>{if(await act("herb.receive",{id},"Отримано: склад оновлено")){S.bp=loadRef();go("herbs")}});
-    sure("Скасувати замовлення? У чат піде повідомлення.",async()=>{if(await act("herb.cancel",{id}))go("herbs")})}};
-
-/* ===== 5. Оптові замовлення: матеріали, гроші, галочки ===== */
-function mats(items){
-  const rm=Object.fromEntries(RECIPES.filter(r=>!r.na&&r.ing).map(r=>[r.name,r])),L={},tg={};
-  items.forEach(i=>tg[i.name]=(tg[i.name]||0)+i.qty);
-  const lv=n=>{if(n in L)return L[n];L[n]=0;if(rm[n])L[n]=1+Math.max(0,...Object.keys(rm[n].ing).map(lv));return L[n]};
-  Object.keys(tg).forEach(lv);
-  const order=Object.keys(L).sort((a,b)=>L[b]-L[a]),need={...tg},cy={};
-  order.forEach(n=>{const r=rm[n];if(!r)return;const q=Math.max(0,(need[n]||0)-stock(n));if(q<=0)return;cy[n]=Math.ceil(q/r.yield);Object.entries(r.ing).forEach(([i,p])=>need[i]=(need[i]||0)+cy[n]*p)});
-  return{rm,order,need,cy}}
-async function ordOpen(id){
-  let o;try{o=await api("orders.get",{id})}catch(e){return toast(e.message,"er")}
-  let inv=(S.c["inventory.list{}"]||{}).items;if(!inv){try{inv=(await api("inventory.list",{})).items}catch(e){inv=[]}}
-  const NT={};inv.forEach(i=>NT[i.name]=i);
-  const key="ordchk:"+id;let ck=[];try{ck=JSON.parse(LS(key)||"[]")}catch(e){}
-  const el=pnl("");
-  const draw=()=>{
-    const L=o.items.map(x=>({n:x.name,q:+x.qty,s:+x.stock,p:x.price===""||isNaN(+x.price)?null:+x.price})),ok=l=>ck.includes(l.n)||l.s>=l.q;
-    const M=mats(L.map(l=>({name:l.n,qty:l.q}))),raw=M.order.filter(n=>!M.rm[n]&&M.need[n]>0),st=M.order.slice().reverse().filter(n=>M.cy[n]);
-    let full=0,buy=0,unk=0,time=0;
-    const mr=raw.map(n=>{const nd=M.need[n],have=stock(n),def=Math.max(0,nd-have),p=S.prices[n],it=NT[n];if(p==null)unk++;else{full+=nd*p;buy+=def*p}
-      return`<tr><td>${esc(n)}</td><td>${nd}</td><td>${have}</td><td class="${def?"bad":""}">${def}</td><td>${p==null?"—":money(p)}</td><td>${p==null?"—":money(def*p)}</td><td class="meta">${it&&(it.note||it.loc)?"📍 "+esc(it.note||it.loc):"—"}</td></tr>`}).join("");
-    const sr=st.map(n=>{const r=M.rm[n],t=M.cy[n]*r.time;time+=t;return`<tr><td><b>${esc(n)}</b></td><td>${M.cy[n]}</td><td>${M.cy[n]*r.yield}</td><td>${fmtT(t)}</td></tr>`}).join("");
-    const inc=L.reduce((a,l)=>a+(l.p==null?0:l.p*l.q),0),pf=unk?null:inc-full,dn=L.filter(ok).length,pc=L.length?Math.round(dn/L.length*100):0;
-    el.innerHTML=`<div class="ph2"><h3>📑 ${esc(o.title)} ${sbg(o.status)}</h3><button class="btn ghost" data-oa="x">✕</button></div>
-    <div class="meta">Готово позицій: <b>${dn} / ${L.length}</b> (${pc}%)</div><span class="bar"><i style="width:${pc}%"></i></span>
-    <div class="scs">${sc("Дохід","💵",money(inc),"за замовлення","gd")}${sc("Матеріали всього","🧾",money(full),unk?"без "+unk+" поз. без ціни":"повна вартість")}${sc("Докупити","🛒",money(buy),"лише чого бракує","er")}${sc("Прибуток","📈",pf==null?"—":money(pf),"дохід − матеріали",pf==null?"":pf>=0?"ok":"er")}${sc("Час крафту","⏱️",fmtT(time),st.length+" етап(ів)")}</div>
-    <h3 style="margin:6px 0">Готова продукція <small class="meta">— став галочку, коли готово</small></h3>
-    <div style="overflow-x:auto"><table><tr><th></th><th>Позиція</th><th>Треба</th><th>На складі</th><th>Ціна</th><th>Сума</th><th>Статус</th></tr>${L.map(l=>`<tr><td><input type="checkbox" class="ckb" data-n="${esc(l.n)}" ${ck.includes(l.n)?"checked":""} style="width:auto"></td><td><b>${esc(l.n)}</b></td><td>${l.q}</td><td>${l.s}</td><td>${l.p==null?"—":money(l.p)}</td><td>${l.p==null?"—":money(l.p*l.q)}</td><td>${ok(l)?bdg(l.s>=l.q?"є на складі":"готово","ok"):bdg("бракує "+(l.q-l.s),"wr")}</td></tr>`).join("")}</table></div>
-    ${sr?`<h3 style="margin:14px 0 6px">Що треба скрафтити</h3><div style="overflow-x:auto"><table><tr><th>Рецепт</th><th>Циклів</th><th>Вихід</th><th>Час</th></tr>${sr}</table></div>`:""}
-    <h3 style="margin:14px 0 6px">Сировина та де її брати</h3>${mr?`<div style="overflow-x:auto"><table><tr><th>Матеріал</th><th>Треба</th><th>Є</th><th>Бракує</th><th>Ціна/од.</th><th>Докупити на</th><th>Звідки</th></tr>${mr}</table></div>`:'<p class="meta">Сировина не потрібна — усе є на складі.</p>'}
-    <p class="meta" style="margin-top:8px">Галочки зберігаються в цьому браузері.</p>
-    ${["Виконано","Скасовано"].includes(o.status)?"":`<div class="acts"><button class="btn" data-oa="ful">Виконати зі складу</button><button class="btn ghost" data-oa="cnl">Скасувати замовлення</button></div>`}`};
-  el.onchange=e=>{const c=e.target.closest(".ckb");if(!c)return;const n=c.dataset.n;ck=c.checked?[...new Set([...ck,n])]:ck.filter(x=>x!==n);LS(key,JSON.stringify(ck));draw()};
-  el.onclick=e=>{const b=e.target.closest("[data-oa]");if(!b)return;const a=b.dataset.oa;
-    if(a==="x")return el.remove();
-    if(a==="ful")return sure("Списати зі складу наявне й записати дохід у касу?",async()=>{if(await act("orders.fulfill",{id},"Замовлення оброблено")){S.bp=loadRef();go("orders")}});
-    sure("Скасувати замовлення?",async()=>{if(await act("orders.status",{id,status:"Скасовано"}))go("orders")})};
-  draw();
-}
-VIEWS.orders=v=>{
-  let D=[],all=false;
-  const act_=o=>!["Виконано","Скасовано"].includes(o.status);
-  const card=o=>`<div class="card rc"><div class="ch" style="margin:0"><h3>${esc(o.title)}</h3>${sbg(o.status)}</div><div class="meta">👤 ${esc(o.party||"—")} · 📅 ${esc(o.due||"без дати")}</div>
-    <div class="rw"><span>Сума</span><b class="gd">${money(o.total)}</b></div><div class="meta">Виконано: ${esc(o.progress)}</div><span class="bar"><i style="width:${parseInt(o.progress)||0}%"></i></span>
-    ${ra(o.id,act_(o)?[["open","📋 Відкрити"],["ful","Виконати"],["cnl","Скасувати"]]:[["open","📋 Відкрити"]])}</div>`;
-  const draw=d=>{D=d;const a=d.filter(act_),l=all?d:a;
-    return `<div class="scs">${sc("Активні","📑",a.length,"у роботі")}${sc("Очікувана сума","💰",money(a.reduce((s,o)=>s+o.total,0)),"по активних","gd")}${sc("Виконано","✅",d.filter(o=>o.status==="Виконано").length,"за весь час","ok")}</div>
-    <div class="chips"><span class="chip ${all?"":"on"}" data-f="0">Активні</span><span class="chip ${all?"on":""}" data-f="1">Усі</span></div>
-    ${l.length?`<div class="grid">${l.map(card).join("")}</div>`:'<div class="card empty">Замовлень немає</div>'}`};
-  page(v,"Оптові замовлення","orders.list",{},draw,`<button class="btn" id="b1">+ Нове замовлення</button>`,true);
-  $("#b1").onclick=orderForm;
-  v.onclick=e=>{const c=e.target.closest("[data-f]");if(c){all=c.dataset.f==="1";$("#pb").innerHTML=draw(D);return}
-    const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
-    if(a==="open")return ordOpen(id);
-    if(a==="ful")return sure("Списати зі складу наявне й записати дохід у касу?",async()=>{if(await act("orders.fulfill",{id},"Замовлення оброблено")){S.bp=loadRef();go("orders")}});
-    sure("Скасувати замовлення?",async()=>{if(await act("orders.status",{id,status:"Скасовано"}))go("orders")})}};
-
-/* ===== 6. Система сповіщень (гілка 82) ===== */
-VIEWS.alerts=v=>{
+/* ---------- 5. сповіщення ---------- */
+VIEWS.alerts=function(v){
   if(!isAdmin()){v.innerHTML='<div class="warn">Доступно лише адміністратору</div>';return}
-  const AC=o=>{const pc=o.repeats?Math.round(o.sent/o.repeats*100):0,cl=o.qty<=0?"er":o.min>0&&o.qty<=o.min?"gd":"ok";
-    return `<div class="card rc"><div class="ch" style="margin:0"><h3>${esc(o.item)}</h3>${sbg(o.status)}</div><div class="meta">${bdg(o.condition,"tl")} ${o.mention?bdg("@"+o.mention,"gd"):""}</div>
-    <div class="rw"><span>📦 Залишок</span><b class="${cl}">${o.qty}${o.min?" / мін. "+o.min:""}</b></div><div class="rw"><span>🔁 Надіслано</span><b>${o.sent} / ${o.repeats}</b></div><span class="bar"><i style="width:${pc}%"></i></span>
-    <div class="meta">⏱ кожні ${o.interval} хв · наступне: ${esc(o.next)}</div>${o.lastError?`<div class="warn">${esc(o.lastError)}</div>`:""}
-    ${ra(o.id,[["restart","▶ Запустити"],["stop","■ Стоп"],["toggle","Вкл/Викл"],["del","Видалити"]])}</div>`};
-  page(v,"Система сповіщень","alerts.list",{},d=>`<div class="scs">${sc("Активні","🔔",d.filter(o=>o.status==="running").length,"надсилають зараз")}${sc("Чекають умови","👁️",d.filter(o=>o.status==="armed").length,"спрацюють самі")}${sc("З помилкою","⚠️",d.filter(o=>o.lastError).length,"перевірте Telegram",d.some(o=>o.lastError)?"er":"ok")}</div>`+(d.length?`<div class="grid">${d.map(AC).join("")}</div>`:'<div class="card empty">Сповіщень немає. Створіть перше.</div>'),`<button class="btn" id="b1">+ Нове сповіщення</button><button class="btn ghost" id="b2">Тест гілки 82</button>`,true);
-  const res=r=>{if(r&&r.ok===false)toast("Telegram: "+(r.error||"помилка"),"er");else toast("Запущено — повідомлення надіслано в гілку 82")};
-  $("#b1").onclick=async()=>{let us=[];try{us=(await api("admin.users")).filter(u=>u.tg&&u.status==="active")}catch(e){}
-    const mf=us.length&&us.length<=9?{k:"mention",l:"Кого тегнути в Telegram",o:[["","Нікого",],...us.map(u=>[u.tg,u.name+" (@"+u.tg+")"])]}:{k:"mention",l:"Кого тегнути (нік TG без @, можна порожньо)"};
-    form("Нове сповіщення",[{k:"item",l:"Предмет",o:allNames()},{k:"condition",l:"Умова запуску",o:[["min","Мін. залишок"],["zero","Предмет відсутній"],["manual","Ручний"]]},mf,{k:"now",l:"Запустити",o:[["0","За умовою / пізніше"],["1","Одразу після збереження"]]},{k:"message",l:"Додатковий текст",t:"area"},{k:"interval",l:"Інтервал, хв",t:"number",v:30},{k:"repeats",l:"Скільки повідомлень у серії",t:"number",v:3},{k:"start",l:"Час старту (Київ), лише для ручного",t:"datetime-local"}],async x=>{const r=await api("alerts.save",x);if(x.now==="1")res(r);go("alerts")})};
-  $("#b2").onclick=async()=>{const b=$("#b2");b.disabled=true;try{await api("admin.tgTest2",{kind:"alert"});toast("Тест надіслано")}catch(e){toast(e.message,"er")}b.disabled=false};
+  let D=[];
+  const card=a=>{const pc=a.repeats?Math.round(a.sent/a.repeats*100):0;
+    return`<div class="card rc"><div class="ch" style="margin:0"><h3>${esc(a.item)}</h3>${sbg(a.status)}</div>
+    <div class="rw"><span>Умова</span>${bdg(a.condition,"tl")}</div>
+    <div class="rw"><span>Залишок / мінімум</span><b class="${a.min&&a.qty<=a.min?"er":""}">${a.qty} / ${a.min||"—"}</b></div>
+    <div class="rw"><span>Інтервал · наступне</span><b>${a.interval} хв · ${esc(a.next)}</b></div>
+    ${a.mention?`<div class="rw"><span>Згадується</span><b class="gd">@${esc(a.mention)}</b></div>`:""}
+    <div class="meta">Надіслано ${a.sent} із ${a.repeats}</div><span class="bar"><i style="width:${pc}%"></i></span>
+    ${a.lastError?`<div class="warn">${esc(a.lastError)}</div>`:""}
+    ${ra(a.id,[["restart","▶ Запустити"],["stop","■ Стоп"],["toggle","Вкл/Викл"],["del","Видалити"]])}</div>`};
+  page(v,"Система оповіщення","alerts.list",{},d=>{D=d;const er=d.filter(a=>a.lastError).length;
+    return`<div class="scs">${sc("Надсилають","🔔",d.filter(a=>a.status==="running").length,"зараз")}${sc("Чекають умови","⏳",d.filter(a=>a.status==="armed").length,"спрацюють самі")}${sc("Помилки","⚠️",er,"остання спроба",er?"er":"ok")}${sc("Всього","📋",d.length,"налаштовано")}</div>
+    ${d.length?`<div class="grid">${d.map(card).join("")}</div>`:'<div class="card empty">Сповіщень ще немає. Створіть перше — наприклад «Мед закінчується».</div>'}
+    <div class="note" style="margin-top:14px">Сповіщення йдуть у гілку сповіщень чату. Згадати людину можна в самому сповіщенні.</div>
+    <div id="ah"></div>`},`<button class="btn" id="b1">+ Нове сповіщення</button><button class="btn ghost" id="b2">Тест: гілка сповіщень</button><button class="btn ghost" id="b3">Тест: гілка трав</button>`,true);
+  const tst=(id,kind)=>{$(id).onclick=async()=>{const b=$(id);b.disabled=true;try{await api("admin.tgTest2",{kind});toast("Тест надіслано")}catch(e){toast(e.message,"er")}b.disabled=false}};
+  tst("#b2","alert");tst("#b3","herb");
+  $("#b1").onclick=async()=>{let sup=[];try{sup=await api("herb.suppliers")}catch(e){}const names=allNames();
+    form("Нове сповіщення",[{k:"item",l:"Предмет",o:names},{k:"condition",l:"Умова запуску",o:[["min","Мін. залишок"],["zero","Предмет відсутній"],["manual","Ручний"]]},{k:"now",l:"Запустити",o:[["1","Одразу після збереження"],["0","Пізніше / за умовою"]]},{k:"mention",l:"Кого згадати в чаті",o:[["","Нікого"],...sup.map(s=>[s.tg,"@"+s.tg+" · "+s.name])]},{k:"message",l:"Додатковий текст",t:"area"},{k:"interval",l:"Інтервал між повідомленнями, хв",t:"number",v:30},{k:"repeats",l:"Скільки повідомлень у серії",t:"number",v:3},{k:"chatId",l:"Інший чат (порожньо — гілка сповіщень)"},{k:"start",l:"Час початку (Київ), лише для ручного",t:"datetime-local"}],
+      async x=>{const r=await api("alerts.save",x);if(x.now==="1"&&r&&r.ok===false)toast("Telegram: "+(r.error||"помилка"),"er");else toast(x.now==="1"?"Сповіщення запущено":"Сповіщення створено");go("alerts")})};
   v.onclick=async e=>{const b=e.target.closest("[data-a]");if(!b)return;const{a,id}=b.dataset;
     if(a==="del")return sure("Видалити сповіщення?",async()=>{if(await act("alerts.action",{id,op:"del"}))go("alerts")});
-    b.disabled=true;try{const r=await api("alerts.action",{id,op:a});if(a==="restart")res(r);else toast("Готово");go("alerts")}catch(x){toast(x.message,"er");b.disabled=false}};
-  api("alerts.history").then(h=>{if(v.isConnected)v.insertAdjacentHTML("beforeend",`<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">Історія відправлення</h3>${tbl([["time","Час"],["item","Предмет"],["n","№"],["status","Статус",o=>sbg(o.status)],["error","Помилка"]],h)}</div>`)}).catch(()=>{})};
+    b.disabled=true;try{const r=await api("alerts.action",{id,op:a});if(a==="restart"&&r&&r.ok===false)toast("Telegram: "+(r.error||"помилка"),"er");else toast("Готово");go("alerts")}catch(x){toast(x.message,"er");b.disabled=false}};
+  api("alerts.history").then(h=>{if(v.isConnected&&$("#ah"))$("#ah").innerHTML=`<div class="card" style="margin-top:16px"><h3 style="margin-bottom:8px">Історія відправлення</h3>${tbl([["time","Час"],["item","Предмет"],["n","№"],["status","Статус",o=>sbg(o.status)],["error","Помилка"]],h)}</div>`}).catch(()=>{});
+};
 
-/* ===== 7. Новорічний декор: льодяники, пряники, цукрові тростини, ялинка, віночок ===== */
+/* ---------- 6. налаштування ---------- */
+TABS.settings=function(b){const K=[["idleMinutes","Бездіяльність до відключення, хв","number"],["capacity","Ємність складу (ліміт)","number"],["tgChat","Telegram: ID чату (за замовчуванням −1004326697795)"],["tgHerbThread","Гілка замовлень трав (за замовчуванням 79)","number"],["tgAlertThread","Гілка сповіщень (за замовчуванням 82)","number"],["defaultChatId","Додатковий chat ID для старих повідомлень"]];
+  page(b,"Налаштування","admin.settings",{},d=>K.map(([k,l,t])=>`<label>${l}</label><input id="s_${k}" type="${t||"text"}" value="${esc(d[k]??"")}">`).join("")+'<p class="meta" style="margin-top:12px">Токен бота зберігається лише у Властивостях скрипта. Бот має бути в групі й мати право писати в гілки.</p>','<button class="btn" id="b1">Зберегти</button>');
+  $("#b1").onclick=async()=>{const d={};K.forEach(([k,,t])=>{const e=$("#s_"+k);if(e)d[k]=e.value});await act("admin.settingsSave",d,"Налаштування збережено")}};
+
 const st=document.createElement("style");st.textContent=`
-#xm{position:fixed;inset:0;z-index:1;pointer-events:none;overflow:hidden}
-.xs{position:absolute;top:-90px;animation:xfall var(--d) linear infinite;animation-delay:var(--l);will-change:transform}
-.xs svg{width:100%;display:block;animation:xsp var(--s) ease-in-out infinite alternate;filter:drop-shadow(0 4px 6px rgba(0,0,0,.35))}
-@keyframes xfall{to{transform:translate3d(var(--dx),118vh,0)}}
-@keyframes xsp{from{transform:rotate(-28deg)}to{transform:rotate(28deg)}}
-#xt{position:fixed;right:140px;bottom:0;width:104px;z-index:4;pointer-events:none}
-#xw{position:fixed;top:2px;right:76px;width:62px;z-index:74;pointer-events:none}
-.xl{animation:xbl 1.3s ease-in-out infinite alternate;animation-delay:var(--d)}
-@keyframes xbl{from{opacity:.25}to{opacity:1}}
-html:not(.ny) #xm,html:not(.ny) #xt,html:not(.ny) #xw,html.hp #xm,html.hp #xt,html.hp #xw,html.lite #xm{display:none!important}
-@media(max-width:1000px){#xt{display:none}}
+.hbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:14px}
+.hb{display:flex;flex-direction:column;gap:9px}.hb.late{border-color:var(--er)!important;box-shadow:0 0 26px -8px rgba(251,113,133,.6)}
+.hb-h{display:flex;justify-content:space-between;align-items:center;gap:8px}.hb-s{display:flex;gap:10px;align-items:center}
+.hb-s>i{font-style:normal;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-size:20px;background:rgba(74,222,128,.14)}
+.hb-m{display:flex;justify-content:space-between;gap:8px;color:var(--mu);font-size:12px;flex-wrap:wrap}.hb-d{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.hb-i{border-top:1px dashed var(--bd);border-bottom:1px dashed var(--bd);padding:6px 0}.hb-i div{display:flex;justify-content:space-between;font-size:13px;padding:2px 0}.hb-t{display:flex;justify-content:space-between;align-items:center}
+.hsec{margin-top:14px}.hsec h4{font:700 11.5px Onest,sans-serif;letter-spacing:.8px;color:var(--ac);margin-bottom:6px}
+.hpv{white-space:pre-wrap;background:rgba(0,0,0,.28);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.5;max-height:230px;overflow:auto}
 `;document.head.append(st);
-const rnd=(a,b)=>a+Math.random()*(b-a),COL=["#ff4d5e","#ffd36b","#43e08f","#5ec8ff","#ff8ad0","#ff9a2e"];
-const SP=[
- (a,b)=>`<svg viewBox="0 0 40 80"><rect x="18" y="34" width="4" height="44" rx="2" fill="#f4ecd8"/><circle cx="20" cy="20" r="17" fill="${a}"/><circle cx="20" cy="20" r="11" fill="none" stroke="${b}" stroke-width="4" stroke-dasharray="14 7"/><circle cx="20" cy="20" r="4" fill="${b}"/></svg>`,
- ()=>`<svg viewBox="0 0 32 80"><path d="M26 78V26a10 10 0 0 0-20 0" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round"/><path d="M26 78V26a10 10 0 0 0-20 0" fill="none" stroke="#e0243a" stroke-width="8" stroke-dasharray="6 7"/></svg>`,
- ()=>`<svg viewBox="0 0 50 60"><g fill="#b8743a"><circle cx="25" cy="10" r="9"/><rect x="14" y="18" width="22" height="22" rx="8"/><rect x="2" y="19" width="16" height="9" rx="4.5"/><rect x="32" y="19" width="16" height="9" rx="4.5"/><rect x="13" y="36" width="10" height="20" rx="5"/><rect x="27" y="36" width="10" height="20" rx="5"/></g><circle cx="21" cy="9" r="1.4" fill="#fff"/><circle cx="29" cy="9" r="1.4" fill="#fff"/><path d="M21 13q4 3 8 0" stroke="#fff" fill="none" stroke-width="1.4"/><circle cx="25" cy="25" r="2" fill="#e24a5a"/><circle cx="25" cy="32" r="2" fill="#43e08f"/><path d="M3 24h13M34 24h13" stroke="#fff" stroke-width="1.4" stroke-dasharray="2 3"/></svg>`];
-const xm=document.createElement("div");xm.id="xm";xm.setAttribute("aria-hidden","true");
-for(let i=0;i<12;i++){const e=document.createElement("div"),sz=rnd(26,46);e.className="xs";e.style.cssText=`left:${rnd(0,96).toFixed(1)}%;width:${sz.toFixed(0)}px;--d:${rnd(22,40).toFixed(1)}s;--l:-${rnd(0,40).toFixed(1)}s;--s:${rnd(2.5,5).toFixed(1)}s;--dx:${rnd(-120,120).toFixed(0)}px`;
-  e.innerHTML=SP[i%3](COL[i%6],COL[(i+2)%6]);xm.append(e)}
-document.body.append(xm);
-const xt=document.createElement("div");xt.id="xt";
-xt.innerHTML=`<svg viewBox="0 0 120 190"><path d="M60 8l8 18 20 2-15 13 5 20-18-10-18 10 5-20-15-13 20-2z" fill="#ffd36b"/><path d="M60 34L26 92h68z" fill="#1f7a45"/><path d="M60 70L16 140h88z" fill="#18683b"/><path d="M60 108L6 176h108z" fill="#145a33"/><rect x="52" y="174" width="16" height="14" fill="#6b4423"/><path d="M40 78Q60 90 80 78M30 112Q60 128 90 112M20 148Q60 168 100 148" fill="none" stroke="#ffd36b" stroke-width="1.5"/>${[[48,70],[72,66],[34,106],[64,100],[86,108],[24,144],[56,140],[90,150],[40,166]].map(([x,y],i)=>`<circle class="xl" cx="${x}" cy="${y}" r="3.6" fill="${COL[i%6]}" style="--d:-${(i*.27).toFixed(2)}s"/>`).join("")}</svg>`;
-document.body.append(xt);
-const xw=document.createElement("div");xw.id="xw";
-xw.innerHTML=`<svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="28" fill="none" stroke="#1f7a45" stroke-width="12"/><circle cx="40" cy="40" r="28" fill="none" stroke="#2fa35f" stroke-width="5" stroke-dasharray="3 5"/>${[0,1,2,3,4,5,6].map(i=>{const a=i*.9;return`<circle class="xl" cx="${(40+28*Math.cos(a)).toFixed(1)}" cy="${(40+28*Math.sin(a)).toFixed(1)}" r="3" fill="${i%2?"#ff4d5e":"#ffd36b"}" style="--d:-${i*.2}s"/>`}).join("")}<path d="M40 62l-12 14M40 62l12 14" stroke="#c81f33" stroke-width="5" stroke-linecap="round"/><circle cx="40" cy="62" r="6" fill="#e0243a"/></svg>`;
-document.body.append(xw);
-/* дзвіночки при успішних діях у новорічній темі */
-const _sfx=sfx;sfx=function(t){_sfx(t);if(!R.classList.contains("ny")||!AU.sfx||t!=="done")return;
-  try{[784,988,1175,1568].forEach((f,i)=>{const o=actx.createOscillator(),g=actx.createGain(),n=actx.currentTime+i*.09;o.type="sine";o.frequency.value=f;g.gain.setValueAtTime(.05,n);g.gain.exponentialRampToValueAtTime(.001,n+.7);o.connect(g);g.connect(actx.destination);o.start(n);o.stop(n+.7)})}catch(e){}};
+})();
+/*PATCH_V6_B — Новий рік: ялинка, гірлянди, віночок, пряники, льодяники, сніг, музика*/
+(function(){
+"use strict";
+const R=document.documentElement,rm=matchMedia("(prefers-reduced-motion:reduce)").matches,rn=(a,b)=>a+Math.random()*(b-a),pk=a=>a[Math.random()*a.length|0];
+const LVL=()=>{try{const v=localStorage.getItem("hpfx");return v===null?2:+v}catch(e){return 2}};
+const isNY=()=>R.classList.contains("ny")&&!R.classList.contains("hp");
+const COL=["#ff5a6e","#ffd36b","#6fe0a0","#6cc8ff","#ff9ad0"];
+
+/* ---------- ілюстрації ---------- */
+const bulbs=(x0,y0,cx,cy,x1,y1,n,off)=>{let s="";for(let i=1;i<=n;i++){const t=i/(n+1),x=(1-t)*(1-t)*x0+2*(1-t)*t*cx+t*t*x1,y=(1-t)*(1-t)*y0+2*(1-t)*t*cy+t*t*y1,c=COL[(i+(off||0))%5];
+  s+=`<g class="bb" style="--i:${i+(off||0)}"><circle cx="${x.toFixed(1)}" cy="${(y+5).toFixed(1)}" r="8" fill="${c}" opacity=".32"/><rect x="${(x-1.6).toFixed(1)}" y="${(y-1).toFixed(1)}" width="3.2" height="4" fill="#244a34"/><ellipse cx="${x.toFixed(1)}" cy="${(y+5).toFixed(1)}" rx="3.2" ry="4.6" fill="${c}"/></g>`}return s};
+const tree=()=>{
+  const T=["M130 20L84 124Q130 138 176 124Z","M130 70L62 192Q130 208 198 192Z","M130 128L44 268Q130 288 216 268Z","M130 196L26 346Q130 372 234 346Z"];
+  let s=`<defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2fa062"/><stop offset="1" stop-color="#0e5a38"/></linearGradient><radialGradient id="sg"><stop offset="0" stop-color="#fff6b0"/><stop offset="1" stop-color="#ffd24a" stop-opacity="0"/></radialGradient></defs><rect x="114" y="340" width="32" height="36" rx="3" fill="#6b4423"/>`;
+  T.forEach(p=>s+=`<path d="${p}" fill="url(#tg)" stroke="#0a4a2e" stroke-width="2" stroke-linejoin="round"/>`);
+  s+=`<path d="M88 114Q130 100 172 114Q130 128 88 114zM68 182Q130 164 192 182Q130 198 68 182zM52 258Q130 234 208 258Q130 280 52 258z" fill="#fff" opacity=".82"/>`;
+  s+=`<path d="M92 112Q130 134 168 112M70 184Q130 216 190 184M52 262Q130 306 208 262M36 336Q130 386 224 336" fill="none" stroke="#ffd36b" stroke-width="3" stroke-linecap="round"/>`;
+  s+=bulbs(92,112,130,134,168,112,3,0)+bulbs(70,184,130,216,190,184,4,1)+bulbs(52,262,130,306,208,262,5,2)+bulbs(36,336,130,386,224,336,6,3);
+  [[118,152,"#c8334a"],[150,170,"#e2c47a"],[98,238,"#4a9ab8"],[168,248,"#c8334a"],[130,302,"#e2c47a"],[78,320,"#c8334a"],[190,322,"#4a9ab8"]].forEach(([x,y,c])=>s+=`<circle cx="${x}" cy="${y}" r="9" fill="${c}"/><circle cx="${x-3}" cy="${y-3}" r="3" fill="#fff" opacity=".7"/><rect x="${x-2}" y="${y-12}" width="4" height="4" fill="#d8b04a"/>`);
+  return s+`<circle class="stg" cx="130" cy="22" r="28" fill="url(#sg)"/><path class="st5" d="M130 3l5.9 12.2 13.4 1.8-9.7 9.3 2.4 13.3L130 33l-12 6.6 2.4-13.3-9.7-9.3 13.4-1.8z" fill="#ffd24a" stroke="#c99a1a" stroke-linejoin="round"/>`};
+const ginger=()=>`<path d="M30 40C20 38 8 44 6 52C4 60 14 62 22 56L34 52L34 74C28 82 22 92 26 100C30 106 38 104 42 98L50 84L58 98C62 104 70 106 74 100C78 92 72 82 66 74L66 52L78 56C86 62 96 60 94 52C92 44 80 38 70 40Z" fill="#b9743a" stroke="#7a4420" stroke-width="2.5" stroke-linejoin="round"/><circle cx="50" cy="24" r="17" fill="#b9743a" stroke="#7a4420" stroke-width="2.5"/><path d="M9 54l20-4M91 54l-20-4M28 91l11 7M72 91l-11 7" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M36 40q14 8 28 0l2 7q-16 8-32 0z" fill="#d6293e"/><path d="M44 43l2 6M52 44l1 6" stroke="#fff" stroke-width="2"/><circle cx="50" cy="58" r="3.2" fill="#d6293e"/><circle cx="50" cy="69" r="3.2" fill="#2f9a5a"/><circle cx="50" cy="80" r="3.2" fill="#d6293e"/><circle cx="44" cy="21" r="2.1" fill="#3a1f0f"/><circle cx="56" cy="21" r="2.1" fill="#3a1f0f"/><path d="M43 28q7 6 14 0" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round"/><circle cx="38" cy="27" r="2.6" fill="#f08a8a" opacity=".6"/><circle cx="62" cy="27" r="2.6" fill="#f08a8a" opacity=".6"/>`;
+const lolli=(a,b)=>`<rect x="32.5" y="58" width="5" height="70" rx="2.5" fill="#f4efe6" stroke="#d8cfc0"/><circle cx="35" cy="34" r="29" fill="${a}"/><path d="M35 34a4 4 0 0 1 8 0a8 8 0 0 1-16 0a12 12 0 0 1 24 0a16 16 0 0 1-32 0a20 20 0 0 1 40 0a24 24 0 0 1-48 0" fill="none" stroke="${b}" stroke-width="4.4" stroke-linecap="round"/><ellipse cx="24" cy="20" rx="9" ry="5" transform="rotate(-35 24 20)" fill="#fff" opacity=".45"/><path d="M35 62l-10-6 2 12zM35 62l10-6-2 12z" fill="#d6293e"/><circle cx="35" cy="62" r="3" fill="#b8202f"/>`;
+const cane=()=>`<path d="M16 106V36a16 16 0 0 1 32 0" fill="none" stroke="#fff" stroke-width="11"/><path d="M16 106V36a16 16 0 0 1 32 0" fill="none" stroke="#d6293e" stroke-width="11" stroke-dasharray="9 9"/>`;
+const gift=(a,b)=>`<rect x="6" y="22" width="48" height="32" rx="3" fill="${a}"/><rect x="2" y="14" width="56" height="12" rx="3" fill="${a}" stroke="rgba(0,0,0,.15)"/><rect x="26" y="14" width="8" height="40" fill="${b}"/><path d="M30 14C20 0 8 6 14 12C18 15 26 14 30 14zM30 14C40 0 52 6 46 12C42 15 34 14 30 14z" fill="${b}"/>`;
+const crystal=()=>`<g stroke="#e8f6ff" stroke-width="2.4" stroke-linecap="round" fill="none">${[0,60,120].map(a=>`<g transform="rotate(${a} 30 30)"><path d="M30 4v52M24 12l6 6 6-6M24 48l6-6 6 6"/></g>`).join("")}</g><circle cx="30" cy="30" r="3" fill="#fff"/>`;
+const wreath=()=>{const cx=60,cy=60;let s="";
+  for(let i=0;i<46;i++){const a=i/46*6.283,r=40+(i%2?4:-4),x=cx+Math.cos(a)*r,y=cy+Math.sin(a)*r;s+=`<ellipse cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="12" ry="5" transform="rotate(${(a*57.3+90+(i%2?28:-28)).toFixed(0)} ${x.toFixed(1)} ${y.toFixed(1)})" fill="${i%3?"#1f7a48":"#33a863"}" stroke="#0f4a2c" stroke-width=".8"/>`}
+  for(let i=0;i<9;i++){const a=i/9*6.283+.3,x=cx+Math.cos(a)*40,y=cy+Math.sin(a)*40;s+=`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="3.4" fill="#d6293e"/><circle cx="${(x-1).toFixed(1)}" cy="${(y-1).toFixed(1)}" r="1" fill="#fff" opacity=".7"/>`}
+  for(let i=0;i<12;i++){const a=i/12*6.283+.1,x=cx+Math.cos(a)*45,y=cy+Math.sin(a)*45,c=COL[i%5];s+=`<g class="bb" style="--i:${i}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="6" fill="${c}" opacity=".35"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="2.8" fill="${c}"/></g>`}
+  return`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 126">${s}<path d="M60 98C40 84 28 104 42 112C52 116 58 106 60 98zM60 98C80 84 92 104 78 112C68 116 62 106 60 98z" fill="#d6293e" stroke="#8c1a26"/><path d="M56 102l-9 18l8-3l3 6zM64 102l9 18l-8-3l-3 6z" fill="#b8202f"/><circle cx="60" cy="98" r="5.5" fill="#b8202f"/></svg>`};
+const sk=(x,y,w,h,vb,inner,cls)=>`<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="${vb}" overflow="visible">${cls?`<g class="${cls}">${inner}</g>`:inner}</svg>`;
+const LP=[["#ff4d6a","#fff"],["#ff8ad0","#fff"],["#3fc27a","#fff"],["#4aa8ff","#fff"],["#ffb02e","#fff"],["#a06aff","#fff"]];
+
+/* ---------- банер головної ---------- */
+function bannerSVG(){
+  let st="";for(let i=0;i<50;i++)st+=`<circle class="nytw" cx="${rn(0,1200).toFixed(0)}" cy="${rn(0,170).toFixed(0)}" r="${rn(.6,1.8).toFixed(1)}" fill="#fff" style="animation-delay:-${rn(0,6).toFixed(1)}s"/>`;
+  const house=`<g transform="translate(480 132)"><rect x="0" y="52" width="150" height="96" fill="#a8683a" stroke="#6b3a1c" stroke-width="3"/><path d="M-14 56L75 -8L164 56z" fill="#8a4a28" stroke="#5a2e14" stroke-width="3" stroke-linejoin="round"/><path d="M-14 56Q2 42 18 56T50 56T82 56T114 56T146 56L164 56L75 -8z" fill="#fff" opacity=".92"/><circle cx="30" cy="40" r="5" fill="#d6293e"/><circle cx="60" cy="18" r="5" fill="#2f9a5a"/><circle cx="96" cy="26" r="5" fill="#d6293e"/><circle cx="124" cy="46" r="5" fill="#ffd24a"/><rect x="108" y="-6" width="18" height="30" fill="#8a4a28" stroke="#5a2e14" stroke-width="2"/><rect x="105" y="-10" width="24" height="7" fill="#fff"/><rect x="14" y="76" width="34" height="34" rx="3" fill="#ffd36b" class="nytw"/><path d="M31 76v34M14 93h34" stroke="#6b3a1c" stroke-width="3"/><rect x="92" y="88" width="34" height="60" rx="3" fill="#6b3a1c"/><circle cx="119" cy="120" r="2.6" fill="#ffd24a"/><path d="M0 52h150M0 120h150" stroke="#fff" stroke-width="5" stroke-dasharray="10 8" opacity=".85"/></g>`;
+  return`<svg class="nysc" viewBox="0 0 1200 300" preserveAspectRatio="xMaxYMax slice" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="nsk" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0a1b3a"/><stop offset=".7" stop-color="#1b3f6e"/><stop offset="1" stop-color="#3a6a9a"/></linearGradient></defs><rect width="1200" height="300" fill="url(#nsk)"/>${st}<circle cx="330" cy="62" r="30" fill="#fff8d8"/><circle cx="330" cy="62" r="64" fill="#fff8d8" opacity=".12"/>
+  <path d="M0 214Q200 168 420 204T820 188T1200 198V300H0z" fill="#27527a" opacity=".75"/><path d="M0 242Q260 204 520 236T1000 224T1200 238V300H0z" fill="#d8e9f6"/>${house}
+  ${sk(752,150,70,78,"0 0 100 112",ginger(),"gm")}${sk(820,162,60,68,"0 0 100 112",ginger(),"gm g2")}${sk(420,176,34,64,"0 0 60 110",cane())}${sk(650,170,34,64,"0 0 60 110",cane())}
+  ${sk(900,6,240,292,"0 0 260 380",tree())}${sk(1100,100,120,150,"0 0 260 380",tree())}
+  <path d="M0 272Q300 248 640 268T1200 260V300H0z" fill="#f4faff"/>
+  ${sk(700,214,40,76,"0 0 70 132",lolli(...LP[0]))}${sk(1070,222,36,68,"0 0 70 132",lolli(...LP[2]))}${sk(1170,218,38,72,"0 0 70 132",lolli(...LP[3]))}${sk(860,246,50,46,"0 0 60 56",gift("#c8334a","#ffd36b"))}${sk(912,254,42,38,"0 0 60 56",gift("#2f9a5a","#fff"))}${sk(540,264,34,64,"0 0 70 132",lolli(...LP[1]))}</svg>`}
+function banner(v){
+  v.querySelectorAll(".nyH").forEach(e=>e.remove());
+  const nm=(S.user&&S.user.name)||"",has=p=>document.querySelector(`#nl a[data-p=${p}]`);
+  v.insertAdjacentHTML("afterbegin",`<section class="card nyH">${bannerSVG()}<div class="nyT"><small>Привіт, ${esc(nm)}!</small><h1>З Новим роком!</h1><p>Затишних свят, теплих зілль і чудового настрою від усієї команди аптеки.</p><div class="acts">${has("craft")?'<button class="btn" data-nyg="craft">До крафту</button>':""}${has("herbs")?'<button class="btn ghost" data-nyg="herbs">Замовлення трав</button>':""}${has("stock")?'<button class="btn ghost" data-nyg="stock">До складу</button>':""}</div></div></section>`);
+  if(!v._ny){v._ny=1;v.addEventListener("click",e=>{const g=e.target.closest("[data-nyg]");if(g)go(g.dataset.nyg)})}}
+const _home=VIEWS.home;
+VIEWS.home=function(v,id){const r=_home.call(this,v,id);try{if(isNY())banner(v)}catch(e){console.warn("ny home",e)}return r};
+
+/* ---------- шари: гірлянда, віночок, снігопад, літаючі цукерки ---------- */
+let TMs=[],tk=0;
+const mk=(id,h,tag)=>{const e=document.createElement(tag||"div");e.id=id;e.setAttribute("aria-hidden","true");if(h)e.innerHTML=h;document.body.append(e);return e};
+const clr=()=>{tk++;TMs.forEach(clearTimeout);TMs=[];["nyg2","nyw","nyN","nys2","nyf2"].forEach(i=>{const e=document.getElementById(i);if(e)e.remove()})};
+function garland(){const W=innerWidth,seg=Math.max(150,Math.min(210,W/7)),n=Math.ceil(W/seg);let s="";
+  for(let i=0;i<n;i++){const x0=i*seg,x1=x0+seg,cx=(x0+x1)/2;
+    s+=`<path d="M${x0} 4Q${cx} 52 ${x1} 4" fill="none" stroke="#1d6a42" stroke-width="7" stroke-linecap="round"/><path d="M${x0} 4Q${cx} 52 ${x1} 4" fill="none" stroke="#49b878" stroke-width="2" stroke-dasharray="2 7" stroke-linecap="round"/>`+bulbs(x0,4,cx,52,x1,4,5,i*2);
+    s+=`<g transform="translate(${x1} 4)"><path d="M0 0l-9-6v12zM0 0l9-6v12z" fill="#d6293e"/><circle r="3.4" fill="#b8202f"/><path d="M-3 4l-3 12M3 4l3 12" stroke="#b8202f" stroke-width="3"/></g>`}
+  return`<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="76" viewBox="0 0 ${W} 76">${s}</svg>`}
+function snow(my){const c=mk("nys2","","canvas");c.style.cssText="position:fixed;inset:0;width:100%;height:100%;z-index:3;pointer-events:none";const x=c.getContext("2d");let W,H;
+  const rs=()=>{W=c.width=innerWidth;H=c.height=innerHeight};rs();addEventListener("resize",rs);
+  const spr=(a)=>{const o=document.createElement("canvas");o.width=o.height=40;const g=o.getContext("2d"),r=g.createRadialGradient(20,20,0,20,20,20);r.addColorStop(0,"rgba(255,255,255,"+a+")");r.addColorStop(.5,"rgba(235,246,255,"+a*.6+")");r.addColorStop(1,"rgba(235,246,255,0)");g.fillStyle=r;g.fillRect(0,0,40,40);return o};
+  const SP=[spr(1),spr(.8),spr(.5)],L=[{n:70,r:[1.5,3],v:[.3,.6],a:.7,s:0},{n:36,r:[4,7],v:[.7,1.2],a:.85,s:1},{n:9,r:[12,20],v:[1.6,2.4],a:.45,s:2}];
+  const P=[];L.forEach((l,k)=>{for(let i=0;i<l.n;i++)P.push({k,x:rn(0,1),y:rn(0,1),d:rn(...l.r),v:rn(...l.v),p:rn(0,6.28),a:l.a})});
+  (function f(t){if(my!==tk){c.remove();removeEventListener("resize",rs);return}
+    if(!document.hidden){x.clearRect(0,0,W,H);const m=[0,.4,1,1.5][LVL()]*(R.classList.contains("lite")?.5:1),wind=Math.sin(t/5200)*.5+Math.sin(t/1900)*.15;
+      P.forEach((p,i)=>{if(i%Math.max(1,Math.round(1/m||1))&&m<1)return;p.p+=.012;p.x+=(Math.sin(p.p)*.0004+wind*.00022*(p.k+1));p.y+=p.v/H*1.6;if(p.y>1.04){p.y=-.04;p.x=rn(0,1)}if(p.x>1.03)p.x=-.03;if(p.x<-.03)p.x=1.03;
+        x.globalAlpha=p.a;x.drawImage(SP[p.k],p.x*W-p.d,p.y*H-p.d,p.d*2,p.d*2)})}
+    requestAnimationFrame(f)})(0)}
+function floaters(){const n=Math.round([0,6,12,18][LVL()]*(R.classList.contains("lite")?.5:1));if(!n)return;
+  const kinds=[()=>{const c=pk(LP);return["0 0 70 132",lolli(c[0],c[1]),rn(40,66)]},()=>["0 0 70 132",lolli(...pk(LP)),rn(44,70)],()=>["0 0 60 110",cane(),rn(34,52)],()=>["0 0 100 112",ginger(),rn(48,72)],()=>["0 0 60 60",crystal(),rn(30,48)],()=>["0 0 60 56",gift(pk(["#c8334a","#2f9a5a","#4a9ab8"]),"#ffd36b"),rn(34,50)]];
+  let h="";for(let i=0;i<n;i++){const [vb,svg,w]=kinds[i%kinds.length]();h+=`<div class="nyfl" style="left:${rn(1,96).toFixed(0)}%;--w:${w.toFixed(0)}px;--d:${rn(38,66).toFixed(0)}s;--dx:${rn(-140,140).toFixed(0)}px;--r0:${rn(-25,25).toFixed(0)}deg;--rr:${rn(25,80).toFixed(0)}deg;animation-delay:-${rn(0,60).toFixed(0)}s"><svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg">${svg}</svg></div>`}
+  mk("nyf2",h)}
+function build(){clr();const my=tk;if(rm||LVL()===0)return;
+  mk("nyg2",garland());mk("nyw",wreath());
+  const u=document.querySelector("nav .usr");if(u){const e=document.createElement("div");e.id="nyN";e.innerHTML=`<svg class="nt" viewBox="0 0 260 380" xmlns="http://www.w3.org/2000/svg">${tree()}</svg><svg class="ng2" viewBox="0 0 100 112" xmlns="http://www.w3.org/2000/svg"><g class="gm">${ginger()}</g></svg>`;u.before(e)}
+  snow(my);floaters()}
+let cur=null,rt=0;
+const sync=()=>{const on=isNY();if(on===cur)return;const first=cur===null;cur=on;clr();if(on)build();
+  if(!first&&S.user&&(location.hash.slice(1)||"home")==="home"&&!document.querySelector("#view .pnl"))go("home")};
+new MutationObserver(sync).observe(R,{attributes:true,attributeFilter:["class"]});
+addEventListener("hptheme",()=>{if(isNY()){clr();build()}});
+addEventListener("resize",()=>{clearTimeout(rt);rt=setTimeout(()=>{if(isNY()){const g=document.getElementById("nyg2");if(g)g.innerHTML=garland()}},250)});
+setTimeout(sync,0);
+
+/* ---------- звук: музична скринька, колядки (суспільне надбання), дзвіночки ---------- */
+const mid=n=>440*Math.pow(2,(n-69)/12);
+let NB=null,RV=null;
+const noise=ctx=>NB&&NB.sampleRate===ctx.sampleRate?NB:(NB=(()=>{const b=ctx.createBuffer(1,ctx.sampleRate,ctx.sampleRate),d=b.getChannelData(0);for(let i=0;i<d.length;i++)d[i]=Math.random()*2-1;return b})());
+const rev=ctx=>{if(RV&&RV.ctx===ctx)return RV.n;const L=ctx.sampleRate*2.6|0,b=ctx.createBuffer(2,L,ctx.sampleRate);for(let c=0;c<2;c++){const d=b.getChannelData(c);for(let i=0;i<L;i++)d[i]=(Math.random()*2-1)*Math.pow(1-i/L,2.6)}const n=ctx.createConvolver();n.buffer=b;RV={ctx,n};return n};
+const vc=(ctx,bus)=>{const T=()=>ctx.currentTime;return{
+  pad(f,t0,d,v){const t=T()+t0,g=ctx.createGain(),lp=ctx.createBiquadFilter();lp.type="lowpass";lp.frequency.value=900;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+d*.35);g.gain.linearRampToValueAtTime(0,t+d);[-6,6].forEach(c=>{const o=ctx.createOscillator();o.type="triangle";o.frequency.value=f;o.detune.value=c;o.connect(lp);o.start(t);o.stop(t+d+.05)});lp.connect(g);g.connect(bus)},
+  box(f,t0,d,v){const t=T()+t0,g=ctx.createGain();g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(v,t+.004);g.gain.exponentialRampToValueAtTime(.0005,t+d);[[1,1],[2.01,.22],[3.99,.09],[6.2,.04]].forEach(([m,a])=>{const o=ctx.createOscillator(),p=ctx.createGain();o.type="sine";o.frequency.value=f*m;p.gain.value=a;o.connect(p);p.connect(g);o.start(t);o.stop(t+d+.05)});g.connect(bus)},
+  jingle(t0,v){for(let k=0;k<6;k++){const t=T()+t0+k*.07,s=ctx.createBufferSource(),f=ctx.createBiquadFilter(),e=ctx.createGain();s.buffer=noise(ctx);f.type="bandpass";f.frequency.value=6200+k*300;f.Q.value=5;e.gain.setValueAtTime(v,t);e.gain.exponentialRampToValueAtTime(.0005,t+.12);s.connect(f);f.connect(e);e.connect(bus);s.start(t,Math.random()*.5);s.stop(t+.14)}}}};
+const SN=[[67,1.5],[69,.5],[67,1],[64,3],[67,1.5],[69,.5],[67,1],[64,3],[74,2],[74,1],[71,3],[72,2],[72,1],[67,3],[69,2],[69,1],[72,1.5],[71,.5],[69,1],[67,1.5],[69,.5],[67,1],[64,3],[69,2],[69,1],[72,1.5],[71,.5],[69,1],[67,1.5],[69,.5],[67,1],[64,3],[74,2],[74,1],[77,1.5],[74,.5],[71,1],[72,3],[76,3],[72,1.5],[67,1.5],[64,1.5],[67,1],[65,1.5],[62,.5],[60,3]];
+const JB=[[64,1],[64,1],[64,2],[64,1],[64,1],[64,2],[64,1],[67,1],[60,1.5],[62,.5],[64,4]];
+const WW=[[62,1],[67,1],[67,.5],[69,.5],[67,.5],[66,.5],[64,1],[64,1],[64,1],[69,1],[69,.5],[71,.5],[69,.5],[67,.5],[66,1],[62,1],[62,1],[71,1],[71,.5],[72,.5],[71,.5],[69,.5],[67,1],[64,1],[62,.5],[62,.5],[64,1],[69,1],[66,1],[67,2]];
+const CH=[[43,55,59,62],[48,55,60,64],[50,57,62,66],[40,55,59,64]],PEN=[79,81,83,86,88,91];
+const stopN=()=>{if(!mus)return;clearInterval(mus.t);const g=mus.g;try{g.gain.cancelScheduledValues(actx.currentTime);g.gain.setTargetAtTime(0,actx.currentTime,.4)}catch(e){}setTimeout(()=>{try{g.disconnect()}catch(e){}},3000);mus=null};
+const prevMusic=music;
+music=function(){if(!isNY())return prevMusic();
+  if(!AU.on){stopN();syncBtn();return}
+  if(mus&&mus.th==="ny2"){mus.g.gain.value=AU.vol*.25;return}
+  stopN();actx=actx||new AudioContext();actx.resume();const ctx=actx;
+  const g=ctx.createGain();g.gain.value=0;g.gain.setTargetAtTime(AU.vol*.25,ctx.currentTime,.8);g.connect(ctx.destination);
+  const cp=ctx.createDynamicsCompressor();cp.threshold.value=-18;cp.ratio.value=4;cp.connect(g);
+  const bus=ctx.createGain(),dry=ctx.createGain(),wet=ctx.createGain();dry.gain.value=.7;wet.gain.value=.6;bus.connect(dry);dry.connect(cp);bus.connect(rev(ctx));rev(ctx).connect(wet);wet.connect(cp);
+  const v=vc(ctx,bus);let ci=0,si=0;
+  const ambient=()=>{const c=CH[ci++%4];c.forEach((n,k)=>v.pad(mid(n),k*.12,10,.09));for(let k=0;k<6;k++)if(Math.random()<.7)v.box(mid(pk(PEN)),.6+k*1.4+Math.random()*.3,2.2,.2);v.jingle(rn(1,5),.05);return 10};
+  const carol=(notes,beat)=>{let t=.3;v.jingle(0,.09);notes.forEach(([n,b])=>{v.box(mid(n+12),t,Math.max(.9,b*beat*2.2),.32);if(b>=3)v.pad(mid(n-12),t,b*beat*1.2,.07);t+=b*beat});v.jingle(t,.07);return t};
+  const seq=[ambient,()=>carol(SN,.62),ambient,()=>carol(JB,.42),ambient,()=>carol(WW,.46)];
+  const next=()=>{if(!mus||mus.th!=="ny2")return;if(document.hidden){mus.t=setTimeout(next,4000);return}let d=10;try{d=seq[si++%seq.length]()}catch(e){}mus.t=setTimeout(next,(d+2.5)*1000)};
+  mus={g,th:"ny2",t:0};next();syncBtn()};
+const _sfx=sfx;
+sfx=function(t){if(!isNY())return _sfx(t);if(!AU.sfx)return;
+  try{actx=actx||new AudioContext();if(actx.state==="suspended")actx.resume();const ctx=actx,bus=ctx.createGain();bus.gain.value=Math.min(.6,AU.vol*1.4);bus.connect(ctx.destination);const v=vc(ctx,bus);
+    if(t==="er"){v.box(mid(55),0,.9,.5);v.box(mid(52),.12,.9,.4)}
+    else if(t==="done"){[79,83,86,91].forEach((n,i)=>v.box(mid(n),i*.09,.9,.35));v.jingle(0,.12)}
+    else if(t==="sys"){v.box(mid(76),0,.8,.4);v.box(mid(71),.18,.8,.35)}
+    else{v.box(mid(88),0,.5,.28);v.box(mid(91),.07,.5,.2)}}catch(e){}};
+document.addEventListener("pointerdown",e=>{if(!isNY()||!AU.sfx||!e.target.closest||!e.target.closest("button,.btn,.chip,nav a"))return;
+  try{actx=actx||new AudioContext();if(actx.state==="suspended")actx.resume();const b=actx.createGain();b.gain.value=Math.min(.35,AU.vol);b.connect(actx.destination);vc(actx,b).box(mid(pk([93,96,100])),0,.18,.16)}catch(x){}},{capture:true,passive:true});
+const _cel=celebrate;celebrate=function(n){_cel(n);if(isNY()&&!rm){const c=document.createElement("div");c.className="nyburst";let h="";for(let i=0;i<26;i++){const a=rn(0,6.283),d=rn(80,260);h+=`<i style="--dx:${(Math.cos(a)*d).toFixed(0)}px;--dy:${(Math.sin(a)*d).toFixed(0)}px;--c:${pk(COL)};animation-delay:${rn(0,.2).toFixed(2)}s">${pk(["❄","✦","✧","🍬"])}</i>`}c.innerHTML=h;document.body.append(c);setTimeout(()=>c.remove(),2200)}};
+
+/* ---------- стилі ---------- */
+const st=document.createElement("style");st.textContent=`
+html.ny #nyg,html.ny #nys,html.ny #nyf,html.ny #nya,html.ny #mas,html.ny .orb,html.ny #v5,html.ny #v5fg,html.ny #v5top,html.ny #v5fw{display:none!important}
+html.ny .hero2{display:none}
+html.ny .card{background:linear-gradient(160deg,rgba(255,255,255,.1),rgba(160,210,255,.03) 45%,transparent),var(--card);backdrop-filter:blur(8px)}
+html.lite.ny .card{backdrop-filter:none}
+.bb{animation:nybb 1.7s ease-in-out infinite;animation-delay:calc(var(--i) * .17s)}@keyframes nybb{0%,100%{opacity:1}50%{opacity:.3}}
+.stg{animation:nysg 2.2s ease-in-out infinite alternate}.st5{transform-box:fill-box;transform-origin:50% 55%;animation:nysp 3.4s ease-in-out infinite alternate}
+@keyframes nysg{from{opacity:.45}to{opacity:1}}@keyframes nysp{from{transform:rotate(-6deg) scale(.96)}to{transform:rotate(6deg) scale(1.06)}}
+.nytw{animation:nytw 3.4s ease-in-out infinite alternate}@keyframes nytw{from{opacity:.25}to{opacity:1}}
+.gm{transform-box:fill-box;transform-origin:50% 100%;animation:nygm 2.8s ease-in-out infinite alternate}.gm.g2{animation-delay:-1.4s}@keyframes nygm{from{transform:rotate(-4deg)}to{transform:rotate(4deg)}}
+#nyg2{position:fixed;left:0;top:0;width:100%;height:76px;z-index:75;pointer-events:none;overflow:hidden}
+#nyw{position:fixed;top:0;right:78px;width:96px;z-index:76;pointer-events:none;transform-origin:50% 0;animation:nysw 4.6s ease-in-out infinite alternate;filter:drop-shadow(0 6px 10px rgba(0,0,0,.5))}
+#nyw::before{content:"";display:block;width:3px;height:38px;margin:0 auto;background:#d6293e}#nyw svg{display:block;width:100%}
+@keyframes nysw{from{transform:rotate(-3deg)}to{transform:rotate(3deg)}}
+#nyN{margin-top:auto;display:flex;align-items:flex-end;justify-content:center;gap:6px;padding:8px 4px 0;pointer-events:none}
+#nyN .nt{width:132px;filter:drop-shadow(0 6px 12px rgba(0,0,0,.45))}#nyN .ng2{width:54px}html.ny .usr{margin-top:0}
+.nyfl{position:fixed;top:0;z-index:4;pointer-events:none;opacity:.92;filter:drop-shadow(0 6px 8px rgba(0,0,0,.45));animation:nyfl var(--d) linear infinite}
+.nyfl svg{width:var(--w);display:block;animation:nyrot 9s ease-in-out infinite alternate;transform-origin:50% 50%}
+@keyframes nyfl{0%{transform:translate(0,112vh) rotate(var(--r0))}50%{transform:translate(var(--dx),52vh) rotate(calc(var(--r0) + var(--rr)))}100%{transform:translate(calc(var(--dx) * -.6),-26vh) rotate(calc(var(--r0) - var(--rr)))}}
+@keyframes nyrot{from{transform:rotate(-14deg)}to{transform:rotate(14deg)}}
+.nyH{position:relative;min-height:300px;padding:0;overflow:hidden;margin-bottom:18px;animation:nyin .8s both}
+.nyH .nysc{position:absolute;inset:0;width:100%;height:100%}
+.nyH::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,16,36,.82),rgba(6,16,36,.35) 46%,transparent 66%);pointer-events:none}
+.nyT{position:relative;z-index:2;padding:46px 44px;max-width:min(520px,60%)}
+.nyT small{font:600 22px "Marck Script",cursive;color:#9fe6ff;display:block;margin-bottom:4px}
+html.ny .nyT h1{font-size:clamp(30px,4.4vw,54px);line-height:1.04;text-align:left;color:#fff;margin-bottom:10px;text-shadow:0 0 28px rgba(143,227,255,.55)}
+.nyT p{font-size:16px;margin-bottom:16px;color:#e9f4ff}
+@keyframes nyin{from{opacity:0;transform:translateY(14px)}}
+.nyburst{position:fixed;left:50%;top:42%;z-index:97;pointer-events:none}
+.nyburst i{position:absolute;font-style:normal;font-size:20px;color:var(--c);text-shadow:0 0 10px var(--c);animation:nyb 1.5s ease-out forwards}
+@keyframes nyb{from{opacity:1;transform:translate(-50%,-50%) scale(.3) rotate(0)}to{opacity:0;transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) scale(1.2) rotate(280deg)}}
+@media(max-width:860px){#nyN{display:none}.nyT{max-width:100%;padding:30px 22px}.nyH::after{background:rgba(6,16,36,.55)}#nyw{width:70px;right:14px}}
+@media(prefers-reduced-motion:reduce){.bb,.stg,.st5,.nytw,.gm,#nyw,.nyfl,.nyfl svg{animation:none}}
+`;document.head.append(st);
 })();
 /* ===== авторизація та сесія ===== */
 async function showApp(){S.bp=loadRef();S.bp.then(prefetch);$("#login").classList.add("hide");$("#app").classList.remove("hide");buildNav();go(location.hash.slice(1)||"home");startPoll()}
