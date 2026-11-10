@@ -2398,5 +2398,259 @@ else if(S.token)api("me").then(u=>{if(!u)return;S.user=u;showApp()}).catch(()=>{
 
 ["click","keydown","pointermove"].forEach(ev=>document.addEventListener(ev,()=>{S.act=true},{passive:true}));
 </script>
+  <!-- ====== ПАТЧ V7+V8 для index.html: вставити ЦЕЙ ВЕСЬ ТЕКСТ прямо ПЕРЕД рядком </body> (в самому кінці файлу) ====== -->
+<script>
+/* ===== PATCH_V7_UI =====
+   ВСТАВИТИ у ваш index.html ПЕРЕД рядком:  /* ===== авторизація та сесія ===== *\/
+   (всередині того ж <script>). Старе нічого видаляти не треба.
+   Що робить: прибирає плеєр зліва знизу та все, що закриває текст; музика й індикатор
+   синхронізації переїжджають у шапку; адмін може редагувати будь-який текст на сайті
+   (вкладка «Тексти» + режим ✏️), вимикати декор і кнопку музики для всіх. */
+(function(){
+"use strict";
+const R=document.documentElement;
+
+/* ---------- 1. стилі: нічого не перекриває текст ---------- */
+const st=document.createElement("style");st.textContent=`
+#mt,#v5cube,#mas,#nyw,#nyN,#hz-mail,.hzf,.web,#nyg,#nyg2,.hz-gar,#hz-grain,#v5top,body>#syn{display:none!important}
+#v5fg,#v5fw,.nyfl,#nys2,#nys,#nyf2,#hwd,.hz-c3{z-index:0!important}
+html.nodecor #decor,html.nodecor .orb,html.nodecor #v5,html.nodecor #v5fg,html.nodecor #v5fw,html.nodecor .nyfl,html.nodecor #nys2,html.nodecor #nyf2,html.nodecor #hwd,html.nodecor #hp2,html.nodecor #nya,html.nodecor #nyf,html.nodecor #nys{display:none!important}
+main{padding-bottom:64px}
+#hd{display:flex;align-items:center;gap:10px}
+#hd .hdr{margin-left:auto;display:flex;gap:8px;align-items:center}
+.hdb{background:rgba(255,255,255,.06);border:1px solid var(--bd);border-radius:10px;padding:5px 11px;cursor:pointer;font-size:15px;line-height:1.2}
+.hdb:hover{border-color:var(--ac)}.hdb.on{border-color:var(--ac);color:var(--ac);box-shadow:0 0 14px rgba(247,183,51,.25)}
+#hd #syn{position:static;display:flex}
+nav .usr{position:sticky;bottom:0;background:inherit;padding-bottom:6px;z-index:2}
+html.cms #view *:hover,html.cms nav *:hover{outline:1px dashed var(--ac);outline-offset:1px;cursor:text}
+`;document.head.append(st);
+
+/* ---------- 2. рушій редагованих текстів ---------- */
+let TX={},UI={},lastSite="",CMS=false,busy=false,applied=false,raf=0;
+const ORI=new WeakMap(),SKIP=new Set(["SCRIPT","STYLE","TEXTAREA","INPUT","SELECT","OPTION","CODE","NOSCRIPT"]);
+const ls=(k,v)=>{try{return v===undefined?localStorage.getItem(k):localStorage.setItem(k,v)}catch(e){return null}};
+function applyAll(){
+  if(busy)return;
+  if(!Object.keys(TX).length&&!applied)return;
+  busy=true;let any=false;
+  try{
+    const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+    while((n=w.nextNode())){
+      const p=n.parentElement;if(!p||SKIP.has(p.tagName)||p.closest(".nocms"))continue;
+      const v=n.nodeValue;let r=ORI.get(n);
+      if(!r||r.a!==v){r={o:v,a:v};ORI.set(n,r)}
+      const key=r.o.trim(),nv=key?TX[key]:undefined;
+      if(nv){const out=r.o.replace(key,()=>nv);if(out!==v)n.nodeValue=out;r.a=out;any=true}
+      else if(r.a!==r.o){n.nodeValue=r.o;r.a=r.o}
+    }
+    const tt=TX["Аптека Аннесбурга"];document.title=tt||"Аптека Аннесбурга";
+  }finally{busy=false;applied=any;mo.takeRecords()}
+}
+function applyUI(){
+  R.classList.toggle("nodecor",UI.decor===0);
+  const m=document.getElementById("hm");if(m)m.style.display=UI.music===0?"none":"";
+}
+function schedule(){
+  if(raf)return;
+  raf=requestAnimationFrame(()=>{raf=0;applyAll();
+    const s=document.getElementById("syn"),h=document.querySelector("#hd .hdr");
+    if(s&&h&&s.parentNode!==h)h.prepend(s)});
+}
+const mo=new MutationObserver(()=>{if(!busy)schedule()});
+mo.observe(document.body,{childList:true,subtree:true,characterData:true});
+
+function loadSite(raw){
+  lastSite=raw;
+  try{const o=raw?JSON.parse(raw):{};TX=o.texts||{};UI=o.ui||{}}catch(e){TX={};UI={}}
+  ls("site7",raw);applyUI();hdr();schedule();
+}
+{const c=ls("site7");if(c)try{const o=JSON.parse(c);TX=o.texts||{};UI=o.ui||{};lastSite=c;applyUI();schedule()}catch(e){}}
+const _as=window.applySync;
+window.applySync=function(s){
+  if(s&&typeof s.site==="string"&&s.site!==lastSite)loadSite(s.site);
+  return _as?_as.call(this,s):undefined;
+};
+async function save(){
+  await api("admin.siteSave",{texts:TX,ui:UI});
+  lastSite=JSON.stringify({texts:TX,ui:UI});ls("site7",lastSite);applyUI();hdr();schedule();
+}
+
+/* ---------- 3. шапка: музика, редагування, синхронізація ---------- */
+function hdr(){
+  const h=document.getElementById("hd");if(!h)return;
+  let d=h.querySelector(".hdr");if(d)d.remove();
+  d=document.createElement("div");d.className="hdr nocms";
+  d.innerHTML=(UI.music===0?"":`<button class="hdb ${AU.on?"on":""}" id="hm" title="Фонова музика">${AU.on?"🎵":"🔇"}</button>`)+
+    (isAdmin()?`<button class="hdb ${CMS?"on":""}" id="he" title="Режим редагування текстів">✏️</button>`:"");
+  h.append(d);const s=document.getElementById("syn");if(s)d.prepend(s);
+}
+const _go=go;
+go=function(id){_go(id);try{hdr();schedule()}catch(e){}};
+document.addEventListener("click",e=>{
+  const t=e.target.closest&&e.target.closest("#hm,#he");if(!t)return;
+  if(t.id==="hm"){AU.on=!AU.on;auSave();music();hdr()}
+  else toggleCms();
+});
+function toggleCms(){
+  CMS=!CMS;R.classList.toggle("cms",CMS);hdr();
+  toast(CMS?"Режим редагування: клацніть на будь-який текст":"Режим редагування вимкнено");
+}
+
+/* ---------- 4. редагування клацанням ---------- */
+function pick(t){for(const n of t.childNodes)if(n.nodeType===3&&n.nodeValue.trim())return n;return null}
+function edit(orig,after){
+  const key=String(orig).trim();if(!key)return;
+  form("Змінити текст: «"+key.slice(0,40)+(key.length>40?"…":"")+"»",
+    [{k:"to",l:"Новий текст (порожньо — повернути оригінал)",v:TX[key]||key}],
+    async x=>{const v=String(x.to).trim();if(v&&v!==key)TX[key]=v;else delete TX[key];await save();toast("Текст збережено для всіх");if(after)after()});
+}
+document.addEventListener("click",e=>{
+  if(!CMS||!isAdmin())return;const t=e.target;
+  if(!t.closest||t.closest(".nocms,.pnl,#toast,.ann"))return;
+  const n=pick(t);if(!n)return;
+  e.preventDefault();e.stopPropagation();
+  const r=ORI.get(n);edit(r?r.o:n.nodeValue);
+},true);
+
+/* ---------- 5. адмін-вкладка «Тексти та вигляд» ---------- */
+TABS.texts=b=>{
+  const draw=()=>{
+    const L=Object.entries(TX).map(([o,n],i)=>({o,n,i:String(i)}));
+    b.innerHTML=`<div class="card"><div class="ch"><h3>✏️ Редагування текстів сайту</h3></div>
+    <p class="meta">Увімкніть режим редагування й клацніть на будь-який напис (меню, заголовки, кнопки, підписи). Зміна одразу з'явиться в усіх користувачів. Також можна додати правило вручну.</p>
+    <div class="acts"><button class="btn" id="ce">${CMS?"Вимкнути":"Увімкнути"} режим редагування</button><button class="btn ghost" id="ca">+ Додати правило</button><button class="btn ghost" id="cr">Скинути всі</button></div></div>
+    <div class="card" style="margin-top:14px"><div class="ch"><h3>Активні заміни (${L.length})</h3></div>${tbl([["o","Було"],["n","Стало",o=>"<b class='gd'>"+esc(o.n)+"</b>"],["a","",o=>ra(o.i,[["edit","Змінити"],["del","Скинути"]])]],L)}</div>
+    <div class="card" style="margin-top:14px"><div class="ch"><h3>🎨 Вигляд для всіх</h3></div>
+    <label class="sw"><input type="checkbox" id="u1" ${UI.decor===0?"":"checked"}><i></i><span>Декор: анімації, сніг, тематичні ефекти</span></label>
+    <label class="sw"><input type="checkbox" id="u2" ${UI.music===0?"":"checked"}><i></i><span>Кнопка музики в шапці</span></label>
+    <p class="meta">Тема та оголошення — у вкладці «Вигляд».</p></div>`;
+  };
+  draw();
+  b.onchange=async e=>{
+    if(e.target.id==="u1")UI.decor=e.target.checked?1:0;
+    else if(e.target.id==="u2")UI.music=e.target.checked?1:0;else return;
+    try{await save();toast("Збережено")}catch(x){toast(x.message,"er")}
+  };
+  b.onclick=async e=>{
+    const T=e.target;
+    if(T.closest("#ce")){toggleCms();return draw()}
+    if(T.closest("#ca"))return form("Нове правило",[{k:"o",l:"Оригінальний текст (точно як на сайті)"},{k:"n",l:"Новий текст"}],async x=>{
+      const o=String(x.o).trim(),n=String(x.n).trim();if(!o||!n)throw new Error("Заповніть обидва поля");
+      TX[o]=n;await save();draw()});
+    if(T.closest("#cr"))return sure("Скинути всі заміни до оригіналу?",async()=>{TX={};try{await save();draw()}catch(x){toast(x.message,"er")}});
+    const t=T.closest("[data-a]");if(!t)return;
+    const k=Object.keys(TX)[+t.dataset.id];if(k===undefined)return;
+    if(t.dataset.a==="edit")return edit(k,draw);
+    delete TX[k];try{await save();draw()}catch(x){toast(x.message,"er")}
+  };
+};
+const _adm=VIEWS.admin;
+VIEWS.admin=function(v){
+  _adm(v);
+  const ch=v.querySelector(".chips");
+  if(ch&&!ch.querySelector('[data-t="texts"]'))ch.insertAdjacentHTML("afterbegin",`<span class="chip ${AT==="texts"?"on":""}" data-t="texts">✏️ Тексти та вигляд</span>`);
+};
+setTimeout(()=>{hdr();schedule()},300);
+})();
+</script>
+<script>
+/*PATCH_V8_UI — вставити у ВАШ СТАРИЙ index.html ПЕРЕД рядком: /* ===== авторизація та сесія ===== *\/
+  (у той самий <script>; нічого видаляти не треба). Потрібен новий Code.gs.
+  Додає: вкладку «💊 Готові препарати», кнопку «🌿 Трави» на «Склад аптеки»,
+  адмін-вкладку «🌿 Трави (колонки)», пороги оповіщення й блок налаштувань оповіщень. */
+(function(){
+"use strict";
+const st=document.createElement("style");st.textContent=`
+.gz{height:7px;background:rgba(0,0,0,.35);border-radius:9px;overflow:hidden;margin:7px 0}.gz i{display:block;height:100%;border-radius:9px;background:linear-gradient(90deg,#22c55e,var(--ok));transition:width .6s}
+.low .gz i{background:linear-gradient(90deg,#f59e0b,#fbbf24)}.out .gz i{background:var(--er)}
+.hi{padding:7px 0;border-bottom:1px solid var(--bd)}.hi:last-child{border:0}.hi.low b{color:#fbbf24}.hi.out b{color:var(--er)}
+.lk{color:var(--ac);cursor:pointer;text-decoration:underline}
+.pc{border-left:4px solid var(--ok)!important}.pc.low{border-left-color:#fbbf24!important}.pc.out{border-left-color:var(--er)!important}
+.pc .big{font-size:36px;font-weight:800;line-height:1.05}.pc.low .big{color:#fbbf24}.pc.out .big{color:var(--er)}
+.pc .ph3{display:flex;justify-content:space-between;gap:8px;align-items:center;margin-bottom:4px}
+.pc .bd2{font-size:11px;font-weight:700;padding:2px 10px;border-radius:99px;background:rgba(74,222,128,.15);color:var(--ok);white-space:nowrap}.pc.low .bd2{background:rgba(251,191,36,.15);color:#fbbf24}.pc.out .bd2{background:rgba(251,113,133,.15);color:var(--er)}
+`;document.head.append(st);
+
+const perms=()=>String((S.user&&S.user.perms)||"").split(",").map(s=>s.trim());
+const canEd=()=>isAdmin()||perms().includes("stock_edit");
+const lvl=i=>i.qty<=0?"out":i.min>0&&i.qty<=i.min?"low":"ok";
+const gw=i=>i.min>0?Math.min(100,i.qty/(i.min*3)*100):(i.qty>0?100:0);
+NP.preps="stock";
+PAGES.splice(PAGES.findIndex(p=>p[0]==="stock")+1,0,["preps","💊","Готові препарати"]);
+
+/* ---------- рядок трави зі шкалою й порогом ---------- */
+const hrow=i=>`<div class="hi ${lvl(i)}"><div class="rw" style="border:0;padding:0"><span>${esc(i.name)}</span><b>${i.qty}</b></div><div class="gz"><i style="width:${gw(i)}%"></i></div>${canEd()?`<small class="meta">🔔 ${i.min>0?"≤ "+i.min:"вимкнено"} · <a class="lk" data-min="${i.id}" data-n="${esc(i.name)}" data-v="${i.min}">поріг</a></small>`:""}</div>`;
+document.addEventListener("click",e=>{const b=e.target.closest("[data-min]");if(!b)return;
+  form("🔔 Поріг оповіщення: "+b.dataset.n,[{k:"min",l:"Сповіщати в Telegram, коли залишок ≤ (0 — вимкнути)",t:"number",v:b.dataset.v}],async x=>{
+    await api("stock.setMin",{itemId:b.dataset.min,min:x.min});toast(x.min>0?"Поріг збережено: оповіщення при ≤ "+x.min:"Оповіщення вимкнено");
+    const was=!!document.querySelector(".pnl.hb"),id=location.hash.slice(1)||"home";S.c={};go(id);if(was)setTimeout(openHerbs,500)})});
+
+/* ---------- «🌿 Трави» на складі ---------- */
+async function openHerbs(){
+  try{const d=await api("stock.herbs"),cols=[...d.cols,{id:"",name:"Без колонки"}];
+    const m=pnl(`<div class="ph2"><h3>🌿 Трави та сировина</h3><button class="btn ghost x">✕</button></div><div class="grid" style="margin-top:12px">${cols.map(c=>{const it=d.items.filter(i=>i.col===c.id);if(!it.length&&!c.id)return"";const n=it.filter(i=>lvl(i)!=="ok").length;
+      return`<div class="card"><div class="ch" style="margin:0"><h3>${esc(c.name)}</h3>${n?bdg(n+" мало","er"):bdg("ок","ok")}</div>${it.map(hrow).join("")||'<p class="meta">Порожньо</p>'}</div>`}).join("")}</div>${isAdmin()?'<p class="meta" style="margin-top:10px">Колонки налаштовуються: Адмін-панель → «Трави (колонки)».</p>':""}`);
+    m.classList.add("hb");m.querySelector(".x").onclick=()=>m.remove()}catch(e){toast(e.message,"er")}}
+const _st=VIEWS.stock;
+VIEWS.stock=function(v,id){const r=_st.call(this,v,id),bar=v.querySelector(".top>div");
+  if(bar&&!bar.querySelector("#bhb")){bar.insertAdjacentHTML("afterbegin",'<button class="btn" id="bhb">🌿 Трави</button>');bar.querySelector("#bhb").onclick=openHerbs}return r};
+
+/* ---------- «💊 Готові препарати» ---------- */
+let PF="all",PQ="",PK=-1;
+VIEWS.preps=function(v){
+  let D=null;const LB={ok:"Є",low:"Мало",out:"Немає"},ord={out:0,low:1,ok:2};
+  const body=d=>{D=d;const tot=d.items.reduce((a,i)=>a+i.qty,0),val=d.items.reduce((a,i)=>a+i.qty*i.price,0),nl=d.items.filter(i=>lvl(i)!=="ok").length;
+    return`<div class="scs">${sc("Позицій","💊",d.items.length,"препаратів")}${sc("Всього","📦",tot,"одиниць")}${sc("Вартість запасу","💰",money(val),"за вказаними цінами","gd")}${sc("Потребують уваги","⚠️",nl,"мало або немає",nl?"er":"ok")}</div>
+    <div class="tools"><input id="pq" placeholder="🔍 Пошук препарату" value="${esc(PQ)}"></div><div id="pf"></div><div class="grid" id="pg"></div>`};
+  const draw=()=>{if(!D||!$("#pg"))return;const q=PQ.trim().toLowerCase();
+    $("#pf").innerHTML='<div class="chips">'+[["all","Усі"],["ok","✅ Є"],["low","🟠 Мало"],["out","🔴 Немає"]].map(x=>`<span class="chip ${PF===x[0]?"on":""}" data-s="${x[0]}">${x[1]}</span>`).join("")+'</div><div class="chips">'+[[-1,"Усі категорії"],...CATS.slice(0,7).map((c,i)=>[i,c])].map(x=>`<span class="chip ${PK===x[0]?"on":""}" data-k="${x[0]}">${x[1]}</span>`).join("")+'</div>';
+    const l=D.items.filter(i=>(PF==="all"||lvl(i)===PF)&&(PK<0||i.cat===PK)&&(!q||i.name.toLowerCase().includes(q))).sort((a,b)=>ord[lvl(a)]-ord[lvl(b)]||a.name.localeCompare(b.name,"uk"));
+    $("#pg").innerHTML=l.map(i=>{const k=lvl(i);
+      return`<div class="card pc ${k}"><div class="ph3"><h3>${esc(i.name)}</h3><span class="bd2">${LB[k]}</span></div><div class="big">${i.qty}</div><div class="gz"><i style="width:${gw(i)}%"></i></div>
+      <div class="meta">${esc(i.category)}${i.price?" · "+money(i.price)+" / од. · разом "+money(i.qty*i.price):""}</div>
+      <div class="meta">🔔 ${i.min>0?"оповіщення при залишку ≤ "+i.min:"оповіщення вимкнено"}</div>
+      <div class="ra">${canEd()?`<button class="btn ghost" data-adj="${i.id}" data-n="${esc(i.name)}">± Залишок</button><button class="btn ghost" data-min="${i.id}" data-n="${esc(i.name)}" data-v="${i.min}">🔔 Поріг</button>`:""}${i.recipe&&(isAdmin()||perms().includes("craft"))?`<button class="btn ghost" data-cr="${i.cat}">⚗️ Крафт</button>`:""}</div></div>`}).join("")||'<div class="card empty">Нічого не знайдено</div>'};
+  const p=page(v,"Готові препарати","stock.goods",{},body,"",true);
+  v.oninput=e=>{if(e.target.id==="pq"){PQ=e.target.value;draw()}};
+  v.onclick=e=>{const T=e.target;
+    if(T.dataset.s){PF=T.dataset.s;return draw()}if(T.dataset.k!=null&&T.classList.contains("chip")){PK=+T.dataset.k;return draw()}
+    const b=T.closest("[data-adj],[data-cr]");if(!b)return;
+    if(b.dataset.cr!=null){craftCat=+b.dataset.cr;return go("craft")}
+    form("Залишок: "+b.dataset.n,[{k:"type",l:"Дія",o:[["in","Надходження (+)"],["out","Списання (−)"],["adjust","Встановити значення"]]},{k:"qty",l:"Кількість",t:"number",v:1},{k:"reason",l:"Причина (обов'язково для списання)"}],async x=>{await api("inventory.move",{...x,itemId:b.dataset.adj});toast("Збережено");S.bp=loadRef();S.c={};go("preps")})};
+  p.then(d=>{if(d&&v.isConnected)draw()});
+};
+
+/* ---------- адмін: «🌿 Трави (колонки)» ---------- */
+TABS.herbs=async function(b){
+  b.innerHTML=SK;
+  try{const d=await api("stock.herbs");let cols=d.cols.map(c=>({...c})),map={};d.items.forEach(i=>{if(i.col)map[i.name]=i.col});
+    const draw=()=>{b.innerHTML=`<div class="note">Створіть колонки (наприклад «Тонізуючий збір») і для кожного інгредієнта оберіть колонку. Так трави групуються в «Склад аптеки → 🌿 Трави».</div>
+    <div class="card"><div class="ch"><h3>Колонки</h3><button class="btn ghost" id="hc">+ Колонка</button></div>${cols.map((c,i)=>`<div class="rw"><input data-n="${i}" value="${esc(c.name)}"><button class="btn ghost" data-d="${i}">✕</button></div>`).join("")||'<p class="meta">Колонок ще немає</p>'}</div>
+    <div class="card" style="margin-top:14px"><div class="ch"><h3>Розподіл інгредієнтів (${d.items.length})</h3></div><input id="hq" placeholder="🔍 Пошук інгредієнта" style="margin-bottom:8px"><table id="ht">${d.items.map(i=>`<tr><td>${esc(i.name)}</td><td><select data-i="${esc(i.name)}"><option value="">— без колонки —</option>${cols.map(c=>`<option value="${esc(c.id)}" ${map[i.name]===c.id?"selected":""}>${esc(c.name)}</option>`).join("")}</select></td></tr>`).join("")}</table></div>
+    <div class="acts"><button class="btn big" id="hs">💾 Зберегти розподіл</button></div>`};
+    draw();
+    b.oninput=e=>{const T=e.target;if(T.dataset.n!=null)cols[+T.dataset.n].name=T.value;if(T.id==="hq")b.querySelectorAll("#ht tr").forEach(r=>r.hidden=!r.textContent.toLowerCase().includes(T.value.toLowerCase()))};
+    b.onchange=e=>{const T=e.target;if(T.dataset.i!=null){T.value?map[T.dataset.i]=T.value:delete map[T.dataset.i]}};
+    b.onclick=async e=>{const T=e.target.closest("button");if(!T)return;
+      if(T.id==="hc"){cols.push({id:"HC"+Date.now().toString(36),name:"Нова колонка"});return draw()}
+      if(T.dataset.d!=null){const c=cols.splice(+T.dataset.d,1)[0];Object.keys(map).forEach(k=>{if(map[k]===c.id)delete map[k]});return draw()}
+      if(T.id==="hs"&&await act("admin.herbColsSave",{cols,map},"Колонки збережено"))TABS.herbs(b)}
+  }catch(e){b.innerHTML=`<p class="meta">${esc(e.message)}</p>`}};
+const _adm=VIEWS.admin;
+VIEWS.admin=function(v){_adm(v);const ch=v.querySelector(".chips");
+  if(ch&&!ch.querySelector('[data-t="herbs"]'))ch.insertAdjacentHTML("beforeend",`<span class="chip ${AT==="herbs"?"on":""}" data-t="herbs">🌿 Трави (колонки)</span>`)};
+
+/* ---------- налаштування оповіщень про малі залишки ---------- */
+const _set=TABS.settings;
+TABS.settings=function(b){_set(b);
+  b.insertAdjacentHTML("beforeend",`<div class="card" style="margin-top:14px"><div class="ch"><h3>🔔 Оповіщення про малі залишки</h3></div><p class="meta">Пороги ставляться кнопкою «Поріг» біля трави чи препарату. Сайт сам шле зведений список у гілку сповіщень бізнесу.</p>
+  <label class="sw"><input type="checkbox" id="lw1" checked><i></i><span>Автооповіщення увімкнено</span></label><label>Повтор, поки залишок малий (годин)</label><input id="lw2" type="number" min="1" max="168" value="6" style="max-width:140px">
+  <div class="acts"><button class="btn" id="lw3">Зберегти</button><button class="btn ghost" id="lw4">🔔 Перевірити зараз</button></div></div>`);
+  api("admin.settings").then(d=>{if(!d||!$("#lw1"))return;$("#lw1").checked=String(d.lowEnabled)!=="0";$("#lw2").value=d.lowRepeatH||6}).catch(()=>{});
+  $("#lw3").onclick=()=>act("admin.settingsSave",{lowEnabled:$("#lw1").checked?"1":"0",lowRepeatH:+$("#lw2").value||6},"Збережено");
+  $("#lw4").onclick=async()=>{try{const r=await api("admin.lowCheck");toast(r.sent?"Надіслано позицій: "+r.sent:"Усе в нормі, надсилати нічого")}catch(e){toast(e.message,"er")}}};
+})();
+</script>
+<!-- ====== кінець патча ====== -->
 </body>
 </html>
