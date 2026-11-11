@@ -2881,5 +2881,213 @@ VIEWS.preps=function(v){
 })();
 </script>
 <!-- ====== кінець патча V9 ====== -->
+  <!-- ====== ПАТЧ V10: вставити ПІСЛЯ патча V9, прямо ПЕРЕД </body> ====== -->
+<script>
+/*PATCH_V10 — чіп «Трави», захист від витоків складу, центи, валідації, аудит*/
+(function(){
+"use strict";
+const NUM=n=>Number.isFinite(+n)?Math.round(+n):0;
+const cents=x=>Math.round((+x+Number.EPSILON)*100)/100;
+const vw=document.getElementById("view");
+const oc=window.confirm.bind(window);
+/* спільне підтвердження V9 для імпорту замінюємо детальним (V10) */
+window.confirm=m=>String(m).startsWith("Режим: ")?true:oc(m);
+
+/* ---------- 1. чіп «Трави» після «Сировина» + прибрати зайвий текст false ---------- */
+const st=document.createElement("style");st.textContent="#bhb{display:none!important}";document.head.append(st);
+function tidy(){
+  if(!vw)return;
+  [...vw.childNodes].forEach(n=>{if(n.nodeType===3&&n.nodeValue.trim()==="false")n.remove()});
+  const row=vw.querySelector("#pb .chips");
+  if(row&&row.querySelector("[data-cf]")&&!row.querySelector("#hbc"))row.insertAdjacentHTML("beforeend",'<span class="chip" id="hbc">🌿 Трави</span>');
+}
+let raf=0;
+if(vw)new MutationObserver(()=>{if(raf)return;raf=requestAnimationFrame(()=>{raf=0;tidy()})}).observe(vw,{childList:true,subtree:true});
+document.addEventListener("click",e=>{if(e.target.closest("#hbc")){const b=document.getElementById("bhb");if(b)b.click()}});
+tidy();
+
+/* ---------- 2. валідатори ---------- */
+const bad=m=>{throw new Error(m)};
+const I=(v,n,min,max)=>{const x=(typeof v==="string"&&v.trim()==="")?NaN:+v;if(!Number.isInteger(x)||x<min||(max!=null&&x>max))bad(`${n}: потрібне ціле число від ${min}${max!=null?" до "+max:""}`);return x};
+const M=(v,n,min)=>{const x=(typeof v==="string"&&v.trim()==="")?NaN:+v;if(!Number.isFinite(x)||x<min)bad(`${n}: некоректна сума`);return cents(x)};
+async function fr(){const d=await api("inventory.list",{}),m={};let s=0;(d.items||[]).forEach(i=>{m[i.name]=i;s+=NUM(i.qty)});return{d,m,total:d.total!=null?NUM(d.total):s}}
+
+/* ---------- 3. ціни тільки в центах ---------- */
+setPrice=async function(item,val){
+  const p=Number(val);
+  if(val===""||!Number.isFinite(p)||p<0){toast("Введіть коректну ціну (0 або більше)","er");return false}
+  const c=cents(p);
+  if(CONFIG.API_URL&&!S.preview){try{await api("prices.set",{item,price:c,note:"Ручне введення"})}catch(e){toast(e.message,"er");return false}}
+  S.prices[item]=c;return true;
+};
+
+/* ---------- 4. захисний шар навколо api ---------- */
+const prev=api,inflight=new Set();
+const WRITES=new Set(["craft","inventory.move","inventory.edit","inventory.bulk","inventory.addItem","herb.save","herb.receive","herb.cancel","orders.save","orders.fulfil","orders.status","admin.bankAdd","admin.payout","tax.pay","admin.itemDelete"]);
+async function balCheck(x,what){
+  let b=null;try{b=await prev("bank.list",{})}catch(e){}
+  if(b&&Number.isFinite(+b.balance)&&x>+b.balance&&!oc(`${what}: сума $${x.toFixed(2)} більша за баланс каси $${(+b.balance).toFixed(2)}. Каса піде в мінус. Продовжити?`))bad("Скасовано");
+}
+api=async function(a,d){
+  if(d&&typeof d==="object"&&!Array.isArray(d)){
+    d={...d};
+    if(a==="craft")d.cycles=I(d.cycles,"Кількість циклів",1,10000);
+    else if(a==="inventory.move"){
+      if(!["in","out","adjust"].includes(d.type))bad("Невідомий тип операції");
+      d.qty=I(d.qty,"Кількість",0);
+      if(String(d.reason||"").trim().length<3)bad("Вкажіть причину (мінімум 3 символи)");
+    }
+    else if(a==="inventory.edit"){d.qty=I(d.qty,"Кількість",0);if(d.min!==undefined)d.min=I(d.min,"Мінімальний залишок",0)}
+    else if(a==="inventory.addItem"||(a==="admin.itemSave"&&!d.id)){
+      d.name=String(d.name||"").trim();if(!d.name)bad("Вкажіть назву");
+      if(d.min!==undefined)d.min=I(d.min,"Мінімальний залишок",0);
+      const F=await fr();
+      if(Object.keys(F.m).some(n=>n.trim().toLowerCase()===d.name.toLowerCase()))bad(`Предмет «${d.name}» уже існує. Дублікати розбивають залишки.`);
+    }
+    else if(a==="admin.itemSave"&&d.min!==undefined)d.min=I(d.min,"Мінімальний залишок",0);
+    else if(a==="stock.setMin")d.min=I(d.min,"Поріг",0);
+    else if(a==="herb.save"||a==="orders.save"){
+      if(!Array.isArray(d.items)||!d.items.length)bad("Додайте хоча б одну позицію");
+      d.items=d.items.map(i=>({...i,qty:I(i.qty,"Кількість",1),price:(a==="orders.save"&&(i.price===null||i.price===""))?null:M(i.price,"Ціна",0)}));
+    }
+    else if(a==="admin.bankAdd"){d.amount=M(d.amount,"Сума",.01);if(d.type==="out")await balCheck(d.amount,"Зняття")}
+    else if(a==="admin.payout"){d.amount=M(d.amount,"Сума",.01);if(d.kind!=="fine")await balCheck(d.amount,"Виплата")}
+    else if(a==="tax.pay")d.amount=M(d.amount,"Сума",0);
+    else if(a==="prices.set")d.price=M(d.price,"Ціна",0);
+    else if(a==="alerts.save"){
+      if(d.interval!==undefined)d.interval=I(d.interval,"Інтервал",1,10080);
+      if(d.repeats!==undefined)d.repeats=I(d.repeats,"Кількість повідомлень",1,100);
+    }
+    else if(a==="admin.settingsSave"){
+      if(d.capacity!==undefined&&String(d.capacity)!=="")d.capacity=I(d.capacity,"Ємність складу",1);
+      if(d.idleMinutes!==undefined&&String(d.idleMinutes)!=="")d.idleMinutes=I(d.idleMinutes,"Бездіяльність, хв",1);
+    }
+    else if(a==="admin.recipeSave"){
+      d.name=String(d.name||"").trim();if(!d.name)bad("Вкажіть назву рецепта");
+      d.skill=I(d.skill,"Вміння",1,99);d.time=I(d.time,"Час, с",0);d.yield=I(d.yield,"Вихід",1);
+      const ing=(d.ing&&typeof d.ing==="object")?{...d.ing}:{},ks=Object.keys(ing);
+      if(!ks.length)bad("Додайте хоча б один інгредієнт");
+      const F=await fr();
+      ks.forEach(n=>{ing[n]=I(ing[n],`Кількість «${n}»`,1);if(!F.m[n])bad(`Інгредієнта «${n}» немає у довіднику складу. Спершу створіть предмет.`)});
+      d.ing=ing;
+    }
+    else if(a==="admin.itemDelete"){
+      const F=await fr(),it=Object.values(F.m).find(i=>i.id===d.id);
+      if(it&&NUM(it.qty)>0)bad(`Не можна видалити «${it.name}»: на складі ${NUM(it.qty)}. Спершу спишіть через «Операція зі складом» (причина обов'язкова), щоб цифри лишилися в журналі.`);
+    }
+    else if(a==="herb.receive"){
+      const o=(S.c["herb.list{}"]||[]).find(x=>x.id===d.id);
+      if(o){
+        if(o.status!=="Замовлено")bad("Це замовлення вже не очікує отримання");
+        const F=await fr(),add=o.items.reduce((s,x)=>s+NUM(x.qty),0),cap=CONFIG.CAPACITY||0;
+        if(cap&&F.total+add>cap&&!oc(`Після отримання на складі буде ${F.total+add} із ${cap}: перевищення місткості. Продовжити?`))bad("Скасовано");
+      }
+    }
+    else if(a==="orders.fulfil"){
+      const o=await prev("orders.get",{id:d.id});
+      if(o&&Array.isArray(o.items)){
+        const F=await fr(),lack=o.items.filter(x=>F.m[x.name]&&NUM(F.m[x.name].qty)<NUM(x.qty)).map(x=>`${x.name} (є ${NUM(F.m[x.name].qty)}, треба ${NUM(x.qty)})`);
+        if(lack.length)bad("Не вистачає на складі: "+lack.join(", "));
+      }
+    }
+  }
+  if(WRITES.has(a)){
+    const k=a+JSON.stringify(d);
+    if(inflight.has(k))bad("Ця операція вже виконується. Зачекайте.");
+    inflight.add(k);
+    try{return await prev(a,d)}finally{inflight.delete(k)}
+  }
+  return prev(a,d);
+};
+
+/* ---------- 5. форми: рецепти та імпорт ---------- */
+const _f=form;
+form=function(title,fields,done){
+  if(title==="Новий рецепт"||title==="Редагувати рецепт"){
+    return _f(title,fields,async x=>{
+      const lines=String(x.ing||"").split("\n").map(s=>s.trim()).filter(Boolean),seen=new Set();
+      if(!lines.length)throw new Error("Додайте хоча б один інгредієнт");
+      lines.forEach(s=>{
+        const m=s.match(/^(.+?)\s*:\s*(\d+)\s*$/);
+        if(!m||+m[2]<1)throw new Error(`Рядок «${s}» має бути у форматі Назва:кількість (ціле число від 1)`);
+        const n=m[1].trim();if(seen.has(n))throw new Error(`Інгредієнт «${n}» вказано двічі`);seen.add(n);
+      });
+      return done(x);
+    });
+  }
+  if(title==="Імпорт залишків зі списку"){
+    return _f(title,fields,async x=>{
+      const F=await fr(),rows=[],bd=[];
+      String(x.list).split("\n").map(s=>s.trim()).filter(Boolean).forEach(s=>{
+        const m=s.match(/^(.+?)\s*[:;\t=]\s*(-?\d+)\s*$/)||s.match(/^(.+?)\s+(\d+)\s*$/);
+        if(!m||+m[2]<0)bd.push(s);else rows.push({name:m[1].trim(),qty:+m[2]});
+      });
+      if(bd.length)throw new Error("Не розпізнано: "+bd.slice(0,3).join(" | "));
+      if(!rows.length)throw new Error("Список порожній");
+      const unk=rows.filter(r=>!F.m[r.name]).map(r=>r.name);
+      if(unk.length)throw new Error("Немає на складі: "+unk.slice(0,4).join(", ")+(unk.length>4?" …":"")+". Перевірте написання (нові предмети створюйте кнопкою «Новий предмет»).");
+      const dup=rows.map(r=>r.name).filter((n,i,a)=>a.indexOf(n)!==i);
+      if(dup.length)throw new Error("Назва повторюється в списку: "+[...new Set(dup)].slice(0,4).join(", "));
+      const ch=rows.map(r=>{const h=NUM(F.m[r.name].qty);return{n:r.name,h,a:x.mode==="set"?r.qty:h+r.qty}}).filter(c=>c.a!==c.h);
+      if(!ch.length)throw new Error("Змін немає: усі числа вже збігаються зі складом");
+      const net=ch.reduce((s,c)=>s+c.a-c.h,0);
+      if(!oc(`Буде змінено ${ch.length} поз.:\n`+ch.slice(0,12).map(c=>`• ${c.n}: ${c.h} → ${c.a}`).join("\n")+(ch.length>12?`\n… і ще ${ch.length-12}`:"")+`\n\nСклад загалом: ${F.total} → ${F.total+net}\n\nПродовжити?`))throw new Error("Скасовано");
+      return done(x);
+    });
+  }
+  return _f(title,fields,done);
+};
+
+/* ---------- 6. адмін: «🧮 Аудит складу» (лише читає, нічого не змінює) ---------- */
+TABS.audit=async function(b){
+  b.innerHTML=SK;
+  try{
+    const [L,H,R,AI,BT]=await Promise.all([
+      api("inventory.list",{}),
+      api("inventory.history").catch(()=>[]),
+      api("admin.recipes").catch(()=>[]),
+      api("admin.items").catch(()=>[]),
+      api("boot").catch(()=>null)]);
+    const items=L.items||[],sum=items.reduce((a,i)=>a+NUM(i.qty),0),names=new Set(items.map(i=>i.name));
+    const blocks=[];let problems=0;
+    const sec=(title,list,okText)=>{
+      if(list.length)problems+=list.length;
+      blocks.push(`<div class="card" style="margin-top:12px"><div class="ch"><h3>${title}</h3>${list.length?bdg(list.length+" проблем","er"):bdg("ок","ok")}</div>${list.length?list.map(x=>`<div class="rw"><span>${x}</span></div>`).join(""):`<p class="meta">${okText}</p>`}</div>`);
+    };
+    sec("Некоректні залишки",items.filter(i=>!Number.isInteger(+i.qty)||+i.qty<0).map(i=>`<b>${esc(i.name)}</b>: ${esc(String(i.qty))}`),"Усі залишки цілі й не від'ємні.");
+    const cnt={};(AI.length?AI.filter(i=>i.active):items).forEach(i=>cnt[i.name.trim().toLowerCase()]=(cnt[i.name.trim().toLowerCase()]||[]).concat(i.name));
+    sec("Дублікати предметів",Object.values(cnt).filter(a=>a.length>1).map(a=>`<b>${esc(a[0])}</b> ×${a.length} (залишок розбито між записами)`),"Дублікатів назв немає.");
+    sec("Сума позицій і «Всього»",(L.total!=null&&NUM(L.total)!==sum)?[`Сума позицій ${sum}, а сервер повертає «Всього» ${NUM(L.total)}`]:[],`Сума позицій = ${sum}, збігається з «Всього».`);
+    const bi=BT&&BT.inv?Object.entries(BT.inv).filter(([n,q])=>names.has(n)&&NUM(q)!==NUM((items.find(i=>i.name===n)||{}).qty)).map(([n,q])=>`<b>${esc(n)}</b>: у «boot» ${NUM(q)}, у складі ${NUM((items.find(i=>i.name===n)||{}).qty)}`):[];
+    sec("Два джерела цифр на сервері",bi,"Дані для крафту й дані складу збігаються.");
+    const rp=[];
+    (R||[]).filter(r=>!r.archived&&!r.na).forEach(r=>{
+      if(!Number.isInteger(+r.yield)||+r.yield<1)rp.push(`<b>${esc(r.name)}</b>: некоректний вихід (${esc(String(r.yield))})`);
+      if(!Number.isInteger(+r.time)||+r.time<0)rp.push(`<b>${esc(r.name)}</b>: некоректний час (${esc(String(r.time))})`);
+      if(!names.has(r.name))rp.push(`<b>${esc(r.name)}</b>: самого препарату немає у складі, випуск нікуди запишеться`);
+      Object.entries(r.ing||{}).forEach(([n,q])=>{
+        if(!Number.isInteger(+q)||+q<1)rp.push(`<b>${esc(r.name)}</b>: інгредієнт «${esc(n)}» має кількість ${esc(String(q))}`);
+        if(!names.has(n))rp.push(`<b>${esc(r.name)}</b>: інгредієнта «${esc(n)}» немає у складі`);
+      });
+    });
+    sec("Рецепти",rp,"Усі рецепти мають коректні числа й існуючі інгредієнти.");
+    /* журнал руху проти поточного залишку (довідково) */
+    const par=v=>{const x=parseFloat(String(v).replace(/[−–]/g,"-").replace("+","").replace(",","."));return Number.isFinite(x)?x:0};
+    const sm={};(H||[]).forEach(o=>{sm[o.item]=(sm[o.item]||0)+par(o.delta)});
+    const jr=items.map(i=>({n:i.name,q:NUM(i.qty),j:Math.round(sm[i.name]||0)})).filter(x=>x.q!==x.j).sort((a,b)=>Math.abs(b.q-b.j)-Math.abs(a.q-a.j));
+    blocks.push(`<div class="card" style="margin-top:12px"><div class="ch"><h3>Журнал руху проти залишку</h3>${bdg("довідково","tl")}</div><p class="meta">Записів у журналі: ${(H||[]).length}. «Поза журналом» = залишок − сума змін у журналі. Ненульове число означає: частина змін не потрапила в журнал руху (стартовий залишок, крафти, що пишуться окремо, або правка таблиці вручну). Це не завжди помилка.</p>${tbl([["n","Предмет",o=>`<b>${esc(o.n)}</b>`],["q","Залишок"],["j","За журналом"],["d","Поза журналом",o=>`<b class="${o.q-o.j>=0?"ok":"er"}">${o.q-o.j>0?"+":""}${o.q-o.j}</b>`]],jr.slice(0,40).map(x=>({...x,d:x.q-x.j})))}</div>`);
+    b.innerHTML=`<div class="scs">${sc("Позицій","📦",items.length,"у складі")}${sc("Всього","🔢",sum,"одиниць")}${sc("Знайдено проблем","🧮",problems,problems?"потребують уваги":"усе чисто",problems?"er":"ok")}</div><div class="acts"><button class="btn" id="au">↻ Перевірити ще раз</button></div>${blocks.join("")}`;
+    b.querySelector("#au").onclick=()=>TABS.audit(b);
+  }catch(e){b.innerHTML=`<p class="meta">${esc(e.message)}</p>`}
+};
+const _adm=VIEWS.admin;
+VIEWS.admin=function(v){
+  _adm(v);
+  const ch=v.querySelector(".chips");
+  if(ch&&!ch.querySelector('[data-t="audit"]'))ch.insertAdjacentHTML("beforeend",`<span class="chip ${AT==="audit"?"on":""}" data-t="audit">🧮 Аудит складу</span>`);
+};
+})();
+</script>
+<!-- ====== кінець патча V10 ====== -->
 </body>
 </html>
