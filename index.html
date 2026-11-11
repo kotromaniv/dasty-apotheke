@@ -2652,5 +2652,234 @@ TABS.settings=function(b){_set(b);
 })();
 </script>
 <!-- ====== кінець патча ====== -->
+  <!-- ====== ПАТЧ V9: вставити ЦЕЙ ВЕСЬ ТЕКСТ у index.html ПІСЛЯ патча V8, прямо ПЕРЕД </body> ====== -->
+<script>
+/*PATCH_V9 — чітка арифметика складу: єдине джерело цифр, квитанції, звірка з сервером*/
+(function(){
+"use strict";
+const NUM=n=>Number.isFinite(+n)?Math.round(+n):0;
+const perms=()=>String((S.user&&S.user.perms)||"").split(",").map(s=>s.trim());
+const canEd=()=>isAdmin()||perms().includes("stock_edit");
+
+/* ---------- 1. єдине джерело цифр: кожне завантаження складу оновлює S.inv; після змін кеш скидається ---------- */
+const core=api;
+async function fresh(){
+  const d=await api("inventory.list",{}),m={};let sum=0;
+  (d.items||[]).forEach(i=>{m[i.name]=i;sum+=NUM(i.qty)});
+  const total=d.total!=null?NUM(d.total):sum;S.total=total;
+  return{d,m,total};
+}
+async function verified(a,d){
+  let exp=null;
+  try{
+    if(a==="herb.receive"){const o=(S.c["herb.list{}"]||[]).find(x=>x.id===d.id);if(o)exp=o.items.map(x=>[x.name,NUM(x.qty)])}
+    else if(a==="orders.fulfil"){const o=await core("orders.get",{id:d.id});if(o&&o.items)exp=o.items.map(x=>[x.name,-NUM(x.qty)])}
+  }catch(e){}
+  let b=null;
+  if(exp){try{b=(await fresh()).m;exp=exp.filter(([n])=>b[n])}catch(e){exp=null}}
+  const r=await core(a,d);
+  if(exp&&exp.length){
+    try{const af=(await fresh()).m,bad=exp.filter(([n,q])=>NUM(af[n].qty)!==NUM(b[n].qty)+q);
+      if(bad.length)toast("Увага, склад не збігся: "+bad.slice(0,3).map(([n,q])=>n+" (очікувалось "+(q>0?"+":"")+q+", стало "+(NUM(af[n].qty)-NUM(b[n].qty))+")").join("; "),"er")}catch(e){}
+  }
+  return r;
+}
+api=async function(a,d){
+  if(a==="herb.receive"||a==="orders.fulfil")return verified(a,d||{});
+  const r=await core(a,d);
+  try{
+    if((a==="inventory.list"||a==="stock.goods")&&r&&Array.isArray(r.items)){
+      r.items.forEach(i=>{if(i&&i.name!=null)S.inv[i.name]=NUM(i.qty)});
+      if(a==="inventory.list"&&r.total!=null)S.total=NUM(r.total);
+    }
+    if(/^(inventory\.(move|edit|bulk|addItem)|craft|herb\.receive|orders\.fulfil|buy\.receive|products\.\w+|admin\.item\w+)$/.test(a))S.c={};
+  }catch(e){}
+  return r;
+};
+/* перед сторінками з розрахунками завжди беремо свіжі дані */
+const _go=go;
+go=function(id){if(["craft","calc","scheme","home"].includes(id)&&!S.preview&&CONFIG.API_URL)S.bp=loadRef();return _go(id)};
+
+/* ---------- 2. квитанція ---------- */
+function receipt(title,rows,note){
+  const bad=rows.filter(x=>!x.t&&x.b+x.d!==x.a);
+  const o=document.createElement("div");o.className="ann";
+  o.innerHTML=`<div style="text-align:left;width:min(580px,100%)"><h3>${esc(title)}</h3><div style="overflow-x:auto"><table><tr><th>Предмет</th><th>Було</th><th>Зміна</th><th>Стало</th></tr>${rows.map(x=>{const ok=x.t||x.b+x.d===x.a;return`<tr><td>${x.t?"<b>"+esc(x.n)+"</b>":esc(x.n)}</td><td>${x.b}</td><td><b class="${x.d>=0?"ok":"er"}">${x.d>0?"+":""}${x.d}</b></td><td class="${ok?"":"bad"}"><b>${x.a}</b>${ok?"":" ≠ "+(x.b+x.d)}</td></tr>`}).join("")}</table></div>
+  ${bad.length?`<div class="warn">⚠ Сервер порахував інакше, ніж очікувалось, по: ${bad.map(x=>esc(x.n)).join(", ")}. Можливо, склад одночасно змінив інший користувач, перевірте «Історію руху».</div>`:'<div class="note" style="margin-top:12px">✓ Усі цифри збігаються з даними сервера.</div>'}
+  ${note?`<p class="meta" style="margin:8px 0">${note}</p>`:""}<div class="acts"><button class="btn" id="rcx">Зрозуміло</button></div></div>`;
+  document.body.append(o);o.querySelector("#rcx").onclick=()=>o.remove();
+}
+
+/* ---------- 3. крафт: звірка до й після ---------- */
+craftPanel=function(r){
+  if(lockR(r))return toast("Недостатньо вміння: потрібно "+r.skill+", у вас "+mySk(),"er");
+  const m=pnl(`<div class="ph2"><h3>${ICON[r.cat]} ${esc(r.name)}</h3><button class="btn ghost x">✕</button></div><label>Кількість виробничих циклів</label><div class="stp"><button class="btn ghost" data-d="-1">−</button><input id="cy" type="number" min="1" step="1" value="1"><button class="btn ghost" data-d="1">+</button><button class="btn ghost" data-d="10">+10</button><button class="btn ghost" id="mx">Макс.</button></div><div id="sm"></div><div class="err" id="ce"></div><div class="acts"><button class="btn" id="ok">Підтвердити крафт</button><button class="btn ghost x">Скасувати</button></div>`);
+  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
+  const calc=()=>{
+    const c=Math.max(1,parseInt($("#cy").value)||1),ins=Object.entries(r.ing).map(([n,q])=>[n,q*c,stock(n)]);
+    const used=ins.reduce((a,x)=>a+x[1],0),out=r.yield*c,tot=totalNow(),fin=tot-used+out,cap=CONFIG.CAPACITY||0,pb=stock(r.name),w=[];
+    if(lockR(r))w.push("Недостатньо вміння: потрібно "+r.skill+", у вас "+mySk());
+    ins.forEach(([n,q,s])=>{if(s<q)w.push(`Не вистачає: ${n} (${q-s})`)});
+    if(!CONFIG.API_URL)w.push("Сервер не підключено");
+    if(out>used&&cap>0&&fin>cap)w.push(`Перевищено місткість складу: стане ${fin} із ${cap}`);
+    let cost=0,unk=0;ins.forEach(([n,q])=>{const p=S.prices[n];if(p==null)unk++;else cost+=p*q});
+    const pp=S.prices[r.name],rev=pp==null?null:pp*out,pf=rev==null?null:rev-cost;
+    $("#sm").innerHTML=`<p class="meta">Час: ${fmtT(r.time*c)} · Циклів: <b>${c}</b> · Випуск: <b>${out}</b></p><div style="overflow-x:auto"><table><tr><th>Інгредієнт</th><th>Є зараз</th><th>Списати</th><th>Залишиться</th><th>Ціна/од. $</th><th>Вартість</th></tr>${ins.map(([n,q,s])=>`<tr><td>${esc(n)}</td><td class="${s<q?"bad":""}">${s}</td><td>−${q}</td><td><b>${s-q}</b></td><td>${pin(n,S.prices[n],80)}</td><td>${S.prices[n]==null?"—":money(S.prices[n]*q)}</td></tr>`).join("")}</table></div>
+    <div class="rw"><span>Готовий «${esc(r.name)}»: було ${pb}</span><b class="ok">+${out} → ${pb+out}</b></div>
+    <div class="rw"><span>Склад загалом</span><b>${tot} → ${fin}${cap?" / "+cap:""}</b></div>
+    <div class="rw"><span>Витрати на матеріали${unk?` <small>(без ${unk} поз. — ціну не вказано)</small>`:""}</span><b class="er">${money(cost)}</b></div>
+    <div class="rw"><span>Ціна продажу «${esc(r.name)}» за од.</span>${pin(r.name,pp)}</div>
+    <div class="rw"><span>Очікувана виручка (${out} од.)</span><b class="gd">${rev==null?"—":money(rev)}</b></div>
+    <div class="rw"><span>Очікуваний прибуток</span><b class="${pf==null?"":pf>=0?"ok":"er"}">${pf==null?"—":money(pf)}</b></div>${w.map(x=>`<div class="warn">${esc(x)}</div>`).join("")}`;
+    $("#ok").disabled=w.length>0;return c};
+  m.onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){calc();toast("Ціну збережено")}};
+  $("#cy").oninput=calc;calc();
+  $("#mx").onclick=()=>{let k=maxCy(r);const used=Object.values(r.ing).reduce((a,x)=>a+x,0),net=r.yield-used,cap=CONFIG.CAPACITY||0;
+    if(net>0&&cap>0)k=Math.min(k,Math.floor((cap-totalNow())/net));$("#cy").value=Math.max(1,k);calc()};
+  $("#ok").onclick=async()=>{
+    const b=$("#ok"),c=Math.max(1,parseInt($("#cy").value)||1),ce=$("#ce");
+    b.disabled=true;b.innerHTML='<span class="spin"></span>Звіряю склад…';ce.textContent="";
+    let F1,delta={},before={},net=0;
+    try{
+      F1=await fresh();const q=n=>NUM((F1.m[n]||{}).qty);
+      const lack=Object.entries(r.ing).filter(([n,p])=>q(n)<p*c).map(([n,p])=>`${n} (бракує ${p*c-q(n)})`);
+      if(lack.length)throw new Error("Склад змінився, не вистачає: "+lack.join(", "));
+      Object.entries(r.ing).forEach(([n,p])=>delta[n]=(delta[n]||0)-p*c);
+      delta[r.name]=(delta[r.name]||0)+r.yield*c;
+      Object.keys(delta).forEach(n=>before[n]=q(n));
+      net=Object.values(delta).reduce((a,x)=>a+x,0);
+      b.innerHTML='<span class="spin"></span>Виконується…';
+      await api("craft",{recipeId:r.id,cycles:c});
+    }catch(e){ce.textContent=e.message;b.textContent="Підтвердити крафт";calc();return}
+    let F2=null;try{F2=await fresh()}catch(e){}
+    m.remove();
+    if(!F2){toast("Крафт виконано, але звірити склад не вдалося. Оновіть сторінку.","er");go("craft");return}
+    const rows=Object.keys(delta).map(n=>({n,b:before[n],d:delta[n],a:NUM((F2.m[n]||{}).qty)}));
+    rows.push({n:"Склад загалом",b:F1.total,d:net,a:F2.total,t:1});
+    receipt("Квитанція крафту: "+r.name+" × "+c+" цикл.",rows);
+    toast("Крафт завершено ✅");celebrate(r.name);sfx("done");go("craft");
+  };
+};
+
+/* ---------- 4. єдиний діалог «Операція зі складом» ---------- */
+async function stockOp(o){
+  o=o||{};let F;
+  try{F=await fresh()}catch(e){return toast(e.message,"er")}
+  const items=Object.values(F.m).sort((a,b)=>a.name.localeCompare(b.name,"uk"));
+  let cur=F.m[o.name]||null,mode=o.mode||"in";
+  const LB={in:"Скільки додати",out:"Скільки списати",set:"Нове точне значення (замість поточного)"};
+  const m=pnl(`<div class="ph2"><h3>🧮 Операція зі складом</h3><button class="btn ghost x">✕</button></div>
+  <label>Предмет</label><select id="soi"><option value="">— оберіть —</option>${items.map(i=>`<option value="${esc(i.name)}" ${cur&&cur.name===i.name?"selected":""}>${esc(i.name)} — ${NUM(i.qty)}</option>`).join("")}</select>
+  <label>Дія</label><div class="seg" id="som">${[["in","➕ Надходження"],["out","➖ Списання"],["set","✎ Встановити точне значення"]].map(x=>`<button type="button" data-m="${x[0]}" class="${x[0]===mode?"on":""}">${x[1]}</button>`).join("")}</div>
+  <label id="sol">${LB[mode]}</label><input id="soq" type="number" min="0" step="1">
+  <label>Причина (обов'язково)</label><input id="sor" placeholder="Напр.: інвентаризація, покупка, брак">
+  <div id="sop" style="margin-top:10px"></div>
+  <label class="sw"><input type="checkbox" id="sok"><i></i><span>Я перевірив(ла): цифри вірні</span></label>
+  <div class="err" id="fe"></div><div class="acts"><button class="btn" id="sos" disabled>Підтвердити</button><button class="btn ghost x">Скасувати</button></div>`);
+  const g=s=>m.querySelector(s);
+  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
+  const state=()=>{
+    const raw=g("#soq").value,q=raw===""?null:+raw,have=cur?NUM(cur.qty):0,w=[];
+    let delta=null;
+    if(q!==null){if(!Number.isInteger(q)||q<0)w.push("Кількість має бути цілим числом, 0 або більше");else if(cur)delta=mode==="in"?q:mode==="out"?-q:q-have}
+    const after=delta===null?null:have+delta;
+    if(!cur)w.push("Оберіть предмет");
+    if(after!==null&&after<0)w.push("Не можна списати більше, ніж є: на складі "+have);
+    if(delta===0)w.push("Зміни немає: число дорівнює поточному");
+    const cap=CONFIG.CAPACITY||0;if(delta>0&&cap>0&&F.total+delta>cap)w.push(`Перевищено місткість складу: стане ${F.total+delta} із ${cap}`);
+    return{q,have,delta,after,w};
+  };
+  const upd=()=>{
+    const s=state();g("#sol").textContent=LB[mode];
+    g("#sop").innerHTML=cur?`<div class="rw"><span>Було</span><b>${s.have}</b></div>${s.delta===null?"":`<div class="rw"><span>Зміна</span><b class="${s.delta>=0?"ok":"er"}">${s.delta>0?"+":""}${s.delta}</b></div><div class="rw"><span>Стане</span><b class="gd" style="font-size:20px">${s.after}</b></div><div class="rw"><span>Склад загалом</span><b>${F.total} → ${F.total+s.delta}${CONFIG.CAPACITY?" / "+CONFIG.CAPACITY:""}</b></div>`}`:"";
+    g("#sop").innerHTML+=s.w.filter(x=>x!=="Оберіть предмет"||cur===null&&false).map(x=>`<div class="warn">${esc(x)}</div>`).join("");
+    g("#sos").disabled=!(!s.w.length&&s.delta!==null&&g("#sor").value.trim().length>=3&&g("#sok").checked);
+  };
+  g("#soi").onchange=e=>{cur=F.m[e.target.value]||null;g("#sok").checked=false;upd()};
+  g("#som").onclick=e=>{const b=e.target.closest("[data-m]");if(!b)return;mode=b.dataset.m;g("#som").querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b));g("#sok").checked=false;upd()};
+  m.addEventListener("input",upd);m.addEventListener("change",upd);upd();
+  g("#sos").onclick=async()=>{
+    const b=g("#sos"),fe=g("#fe");fe.textContent="";b.disabled=true;b.innerHTML='<span class="spin"></span>Звіряю…';
+    try{
+      const F2=await fresh(),it=F2.m[cur.name];if(!it)throw new Error("Предмет не знайдено на складі");
+      if(NUM(it.qty)!==NUM(cur.qty)){F=F2;cur=it;g("#sok").checked=false;upd();throw new Error("Залишок щойно змінився (тепер "+NUM(it.qty)+"). Перевірте цифри й підтвердіть ще раз.")}
+      const q=+g("#soq").value,have=NUM(it.qty),delta=mode==="in"?q:mode==="out"?-q:q-have,exp=have+delta;
+      await api("inventory.move",{type:mode==="set"?"adjust":mode,itemId:it.id,qty:q,reason:g("#sor").value.trim()});
+      let got=null;try{got=NUM(((await fresh()).m[it.name]||{}).qty)}catch(e){}
+      m.remove();
+      if(got===null)toast("Збережено, але звірити не вдалося. Оновіть сторінку.","er");
+      else if(got!==exp)toast(`Увага: очікувалось ${exp}, а на складі ${got} (${it.name}). Перевірте журнал руху.`,"er");
+      else toast(`${it.name}: ${have} → ${got}`);
+      S.bp=loadRef();go(location.hash.slice(1)||"home");
+    }catch(e){fe.textContent=e.message;b.textContent="Підтвердити";upd()}
+  };
+}
+window.stockOp=stockOp;
+
+/* ---------- 5. перехоплення старих форм ---------- */
+const _form=form;
+form=function(title,fields,done){
+  if(title==="Операція зі складом"){stockOp();return}
+  if(/^Залишок: /.test(title)){stockOp({name:title.slice(9),mode:"set"});return}
+  if(/^Змінити: /.test(title)&&fields.some(f=>f.k==="qty")&&fields.some(f=>f.k==="reason")){
+    const nm=title.slice(9);
+    return _form(title+" (кількість змінюється кнопкою «± К-сть»)",fields.filter(f=>f.k!=="qty"&&f.k!=="reason"),async x=>{
+      const F=await fresh(),it=F.m[nm];x.qty=it?NUM(it.qty):0;x.reason="Правка параметрів без зміни кількості";return done(x)});
+  }
+  if(title==="Імпорт залишків зі списку"){
+    return _form(title,fields,async x=>{
+      if(String(x.reason).trim().length<5)throw new Error("Вкажіть причину (мінімум 5 символів)");
+      const n=String(x.list).split("\n").filter(s=>s.trim()).length;
+      if(!confirm("Режим: "+(x.mode==="set"?"ВСТАНОВИТИ кількість (замінить поточні числа)":"додати до наявного")+"\nРядків у списку: "+n+"\n\nЦе змінить залишки на складі. Продовжити?"))throw new Error("Скасовано");
+      return done(x)});
+  }
+  return _form(title,fields,done);
+};
+
+/* кнопки ➕ ➖ ✎ / «± К-сть» */
+document.addEventListener("click",e=>{
+  const b=e.target.closest("[data-op]");if(!b)return;
+  let name=b.dataset.n;
+  if(!name){const it=((S.c["inventory.list{}"]||{}).items||[]).find(i=>i.id===b.dataset.id);name=it&&it.name}
+  stockOp({name,mode:b.dataset.op});
+});
+/* «± К-сть» у таблиці «Склад аптеки» */
+const vw=document.getElementById("view");
+if(vw)new MutationObserver(()=>{
+  if(!canEd())return;
+  vw.querySelectorAll('#stt [data-a="edit"]').forEach(b=>{const w=b.parentNode;if(!w.querySelector("[data-op]"))w.insertAdjacentHTML("beforeend",`<button class="btn ghost" data-op="set" data-id="${esc(b.dataset.id)}">± К-сть</button>`)})
+}).observe(vw,{childList:true,subtree:true});
+
+/* ---------- 6. «Готові препарати»: ті самі цифри, що й на складі, зі зміною кількості ---------- */
+let PF="all",PQ="",PK=-1;
+const catOf=i=>{const r=RECIPES.find(x=>x.name===i.name);return r?r.cat:CATS.indexOf(i.category)};
+const isProd=i=>{const c=catOf(i);return c>=0&&c<7};
+const lvl=i=>NUM(i.qty)<=0?"out":i.min>0&&NUM(i.qty)<=i.min?"low":"ok";
+const gw=i=>i.min>0?Math.min(100,NUM(i.qty)/(i.min*3)*100):(NUM(i.qty)>0?100:0);
+VIEWS.preps=function(v){
+  v.onclick=null;v.oninput=null;let D=null;
+  const LB={ok:"Є",low:"Мало",out:"Немає"},ord={out:0,low:1,ok:2};
+  const list=()=>D.items.filter(isProd);
+  const filt=()=>'<div class="chips">'+[["all","Усі"],["ok","✅ Є"],["low","🟠 Мало"],["out","🔴 Немає"]].map(x=>`<span class="chip ${PF===x[0]?"on":""}" data-s="${x[0]}">${x[1]}</span>`).join("")+'</div><div class="chips">'+[[-1,"Усі категорії"],...CATS.slice(0,7).map((c,i)=>[i,c])].map(x=>`<span class="chip ${PK===x[0]?"on":""}" data-k="${x[0]}">${x[1]}</span>`).join("")+'</div>';
+  const cards=()=>{const q=PQ.trim().toLowerCase();
+    const l=list().filter(i=>(PF==="all"||lvl(i)===PF)&&(PK<0||catOf(i)===PK)&&(!q||i.name.toLowerCase().includes(q))).sort((a,b)=>ord[lvl(a)]-ord[lvl(b)]||a.name.localeCompare(b.name,"uk"));
+    return l.map(i=>{const k=lvl(i),p=S.prices[i.name],r=RECIPES.find(x=>x.name===i.name),qn=NUM(i.qty);
+      return`<div class="card pc ${k}"><div class="ph3"><h3>${esc(i.name)}</h3><span class="bd2">${LB[k]}</span></div><div class="big">${qn}</div><div class="gz"><i style="width:${gw(i)}%"></i></div>
+      <div class="meta">${esc(i.category)}${p!=null?" · "+money(p)+" / од. · разом "+money(qn*p):""}</div><div class="meta">🔔 ${i.min>0?"оповіщення при ≤ "+i.min:"оповіщення вимкнено"}</div>
+      <div class="ra">${canEd()?`<button class="btn ghost" data-op="in" data-n="${esc(i.name)}">➕</button><button class="btn ghost" data-op="out" data-n="${esc(i.name)}">➖</button><button class="btn ghost" data-op="set" data-n="${esc(i.name)}">✎ Встановити</button><button class="btn ghost" data-min="${esc(i.id)}" data-n="${esc(i.name)}" data-v="${i.min}">🔔 Поріг</button>`:""}${r&&!r.na&&(isAdmin()||perms().includes("craft"))?`<button class="btn ghost" data-cr="${r.cat}">⚗️ Крафт</button>`:""}</div></div>`}).join("")||'<div class="card empty">Нічого не знайдено</div>'};
+  const body=d=>{D=d;const L=list(),tot=L.reduce((a,i)=>a+NUM(i.qty),0),val=L.reduce((a,i)=>a+NUM(i.qty)*(+S.prices[i.name]||0),0),nl=L.filter(i=>lvl(i)!=="ok").length;
+    return`<div class="scs">${sc("Позицій","💊",L.length,"препаратів")}${sc("Всього","📦",tot,"одиниць (ті самі числа, що на складі)")}${sc("Вартість запасу","💰",money(val),"за вказаними цінами","gd")}${sc("Потребують уваги","⚠️",nl,"мало або немає",nl?"er":"ok")}</div>
+    <div class="tools"><input id="pq" placeholder="🔍 Пошук препарату" value="${esc(PQ)}"></div><div id="pf">${filt()}</div><div class="grid" id="pg">${cards()}</div>`};
+  page(v,"Готові препарати","inventory.list",{},body,canEd()?'<button class="btn" id="b1">🧮 Операція зі складом</button>':"",true);
+  if($("#b1"))$("#b1").onclick=()=>stockOp();
+  v.oninput=e=>{if(e.target.id==="pq"&&D){PQ=e.target.value;$("#pg").innerHTML=cards()}};
+  v.onclick=e=>{const T=e.target;
+    if(T.dataset.s){PF=T.dataset.s;$("#pf").innerHTML=filt();$("#pg").innerHTML=cards();return}
+    if(T.dataset.k!=null&&T.classList.contains("chip")){PK=+T.dataset.k;$("#pf").innerHTML=filt();$("#pg").innerHTML=cards();return}
+    const c=T.closest("[data-cr]");if(c){craftCat=+c.dataset.cr;go("craft")}};
+};
+})();
+</script>
+<!-- ====== кінець патча V9 ====== -->
 </body>
 </html>
