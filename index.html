@@ -3325,5 +3325,213 @@ VIEWS.ledger=async function(v){
 })();
 </script>
 <!-- ====== кінець патча V11 ====== -->
+  <!-- ====== ПАТЧ V12: вставити ПІСЛЯ патча V11, прямо ПЕРЕД </body> ====== -->
+<script>
+/*PATCH_V12 — Податок на бізнес: автоматичний облік 7 днів, $300/тиждень*/
+(function(){
+"use strict";
+/* ---------- налаштування правил (змінюються тут) ---------- */
+const TAX=300;            /* податок за один тиждень, $ */
+const ACCRUE=true;        /* true: кожен прострочений тиждень додає ще $TAX; false: завжди один тиждень */
+const DAY=864e5,WEEK=7*DAY,WARN=3*DAY,CRIT=2*DAY;   /* жовте з 5-го дня (≤72 год), червоне з 6-го (≤48 год) */
+const KY="Europe/Kyiv",R=document.documentElement,core=api;
+const TN={rows:[],last:null,now:0,t:0,bal:null};
+const nowMs=()=>TN.t?TN.now+(Date.now()-TN.t):Date.now();   /* серверний час, не годинник комп'ютера */
+const fdt=ms=>new Intl.DateTimeFormat("uk-UA",{timeZone:KY,day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(ms));
+const fday=ms=>new Intl.DateTimeFormat("uk-UA",{timeZone:KY,weekday:"short",day:"2-digit",month:"2-digit"}).format(new Date(ms));
+const p2=n=>String(n).padStart(2,"0");
+const left=(ms,sec)=>{ms=Math.max(0,ms);const d=Math.floor(ms/DAY),h=Math.floor(ms%DAY/36e5),m=Math.floor(ms%36e5/6e4),s=Math.floor(ms%6e4/1e3);
+  return d?`${d}д ${p2(h)}г ${p2(m)}хв`:h?`${h}г ${p2(m)}хв${sec?" "+p2(s)+"с":""}`:`${m}хв ${p2(s)}с`};
+const perms=()=>String((S.user&&S.user.perms)||"").split(",").map(s=>s.trim());
+const canPay=()=>!S.preview&&(isAdmin()||perms().includes("tax"));
+/* київський час (рядок datetime-local) → UTC мс */
+const tzoff=ms=>{const p=new Intl.DateTimeFormat("en-US",{timeZone:KY,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"}).formatToParts(new Date(ms)),g=k=>+p.find(x=>x.type===k).value;return Date.UTC(g("year"),g("month")-1,g("day"),g("hour"),g("minute"),g("second"))-ms};
+const kyivMs=s=>{const m=String(s).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);if(!m)return NaN;const g=Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);let t=g;t=g-tzoff(t);t=g-tzoff(t);return t};
+const kyivLocal=ms=>{const p=new Intl.DateTimeFormat("en-CA",{timeZone:KY,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hourCycle:"h23"}).formatToParts(new Date(ms)),g=k=>p.find(x=>x.type===k).value;return g("year")+"-"+g("month")+"-"+g("day")+"T"+g("hour")+":"+g("minute")};
+
+/* ---------- стара система більше не втручається ---------- */
+api=function(a,d){if(a==="tax.status")return Promise.resolve(null);return core(a,d)};
+
+/* ---------- чітка модель: від останнього платежу 7 днів ---------- */
+function state(now){
+  const L=TN.last;
+  if(!L)return{lv:"none",rem:0,k:1,due:TAX};
+  const D=L.paidAt+WEEK,rem=D-now;
+  if(rem>0)return{lv:rem<=CRIT?"crit":rem<=WARN?"warn":"ok",D,rem,el:now-L.paidAt,k:1,due:0,next:TAX,day:Math.floor((now-L.paidAt)/DAY)+1};
+  const O=-rem,k=ACCRUE?1+Math.floor(O/WEEK):1;
+  return{lv:"over",D,rem,over:O,el:now-L.paidAt,k,due:TAX*k,next:TAX*k,day:7};
+}
+async function pull(){
+  if(!CONFIG.API_URL||S.preview||!S.token)return false;
+  let d=null;try{d=await core("tax.list",{})}catch(e){}
+  if(d){
+    TN.rows=(d.rows||[]).map(r=>({...r,paidAt:+r.paidAt,amount:+r.amount})).sort((a,b)=>b.paidAt-a.paidAt);
+    TN.last=TN.rows[0]||(d.status&&d.status.last?{...d.status.last}:null);
+    TN.now=(d.status&&d.status.now)||Date.now();TN.t=Date.now();return true;
+  }
+  try{const s=await core("tax.status",{});if(s){TN.last=s.last||null;TN.rows=TN.last?[TN.last]:[];TN.now=s.now||Date.now();TN.t=Date.now();return true}}catch(e){}
+  return false;
+}
+
+/* ---------- стилі ---------- */
+const st=document.createElement("style");st.textContent=`
+.txt{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin:12px 0 4px}
+.txd{padding:10px 4px;border-radius:12px;border:1px solid var(--bd);text-align:center;background:rgba(255,255,255,.04);transition:transform .2s}
+.txd b{display:block;font-size:18px}.txd small{display:block;color:var(--mu);font-size:11px}
+.txd.p{opacity:.5}.txd.c{transform:translateY(-3px);box-shadow:0 0 18px rgba(255,255,255,.18)}
+.txd.k1{border-color:rgba(74,222,128,.45)}.txd.k2{border-color:rgba(251,191,36,.7)}.txd.k3{border-color:rgba(251,113,133,.8)}
+.txd.c.k1{box-shadow:0 0 18px rgba(74,222,128,.4)}.txd.c.k2{box-shadow:0 0 18px rgba(251,191,36,.45)}.txd.c.k3{box-shadow:0 0 18px rgba(251,113,133,.5)}
+.txov{margin-top:10px;padding:10px 14px;border-radius:12px;background:rgba(251,113,133,.14);color:var(--er);font-weight:700}
+.txbig{font-size:30px!important}
+@media(max-width:700px){.txt{grid-template-columns:repeat(4,1fr)}}
+`;document.head.append(st);
+
+/* ---------- верхня смуга й тема (раз на 20 с локально, з сервера раз на 5 хв) ---------- */
+function banner(){
+  if(!S.user)return;
+  const s=state(nowMs()),lv=s.lv;
+  R.classList.toggle("tx-warn",lv==="warn");R.classList.toggle("tx-crit",lv==="crit"||lv==="over");
+  let b=document.getElementById("txb");
+  if(!["warn","crit","over"].includes(lv)){if(b)b.remove();R.style.setProperty("--bh","0px");return}
+  if(!b){const w=document.getElementById("wrap");if(!w)return;b=document.createElement("div");b.id="txb";w.prepend(b);b.onclick=()=>go("tax")}
+  b.className=lv==="warn"?"warn":"crit";
+  b.innerHTML=lv==="over"
+    ?`<span>🚨</span><b>ПОДАТОК ПРОСТРОЧЕНО на ${left(s.over)}</b><span>до сплати ${money(s.due)}</span><u>Сплатити →</u>`
+    :`<span>${lv==="crit"?"🚨":"⚠️"}</span><b>${lv==="crit"?"ТЕРМІНОВО: податок на бізнес":"Час сплатити податок на бізнес"}</b><span>залишилось ${left(s.rem)} · дедлайн ${fdt(s.D)} · ${money(TAX)}</span><u>Відкрити →</u>`;
+  R.style.setProperty("--bh","40px");
+}
+setInterval(()=>{if(S.user&&!document.hidden)banner()},20000);
+setInterval(()=>{if(S.user&&!document.hidden&&!S.preview)pull().then(banner)},300000);
+const _show=showApp;showApp=function(){_show();pull().then(banner)};
+
+/* ---------- сторінка «Податок» ---------- */
+let timer=0;
+VIEWS.tax=async function(v){
+  const t=S.cur;v.onclick=null;v.oninput=null;clearInterval(timer);
+  v.innerHTML=`<div class="top"><h2>Податок на бізнес</h2><div></div></div>${SK}`;
+  if(S.preview||!CONFIG.API_URL){const n=Date.now();TN.last={id:"demo",paidAt:n-2*DAY,payer:"Демо",by:"Демо",amount:TAX};TN.rows=[TN.last];TN.now=n;TN.t=n}
+  else await pull();
+  TN.bal=null;
+  if(isAdmin()&&!S.preview&&CONFIG.API_URL){try{const b=await core("bank.list",{});TN.bal=+b.balance}catch(e){}}
+  if(t!==S.cur)return;
+  let lastLv=null;
+  const draw=()=>{
+    const now=nowMs(),s=state(now),L=TN.last;lastLv=s.lv;
+    const col=s.lv==="over"||s.lv==="crit"?"var(--er)":s.lv==="warn"?"var(--wr)":"var(--ok)",cls=s.lv==="over"||s.lv==="crit"?"er":s.lv==="warn"?"wr":"ok";
+    const lbl={ok:"Усе гаразд",warn:"Час платити",crit:"ТЕРМІНОВО",over:"ПРОСТРОЧЕНО",none:"Платежів ще не було"}[s.lv];
+    const Rr=52,C=2*Math.PI*Rr,pr=s.lv==="over"?1:s.lv==="none"?0:Math.min(1,s.el/WEEK);
+    const center=s.lv==="over"?"!":s.lv==="none"?"—":Math.ceil(s.rem/DAY);
+    const amount=s.lv==="over"?s.due:TAX;
+    /* таймлайн 7 днів */
+    let tl="";
+    if(L){const ed=Math.floor((now-L.paidAt)/DAY);
+      for(let k=1;k<=7;k++){const kc=k>=6?"k3":k===5?"k2":"k1",past=k<=ed||s.lv==="over",cur=!past&&k===ed+1;
+        tl+=`<div class="txd ${kc} ${past?"p":""} ${cur?"c":""}"><small>День ${k}</small><b>${past?"✓":cur?"●":"○"}</b><small>${fday(L.paidAt+(k-1)*DAY)}</small></div>`}}
+    /* статистика й історія */
+    const asc=TN.rows.slice().sort((a,b)=>a.paidAt-b.paidAt),late={};let on=0,gaps=[],tot=0,maxLate=0;
+    asc.forEach((r,i)=>{tot+=r.amount;if(i>0){const g=r.paidAt-asc[i-1].paidAt;gaps.push(g);const l=r.paidAt-(asc[i-1].paidAt+WEEK);late[r.id]=l;if(l<=0)on++;maxLate=Math.max(maxLate,l)}});
+    const cmp=asc.length-1,avg=gaps.length?gaps.reduce((a,x)=>a+x,0)/gaps.length:0;
+    /* прогноз (якщо платити рівно в дедлайн) */
+    const fc=[];if(L){let d0=s.lv==="over"?now:s.D,cum=0;for(let i=0;i<5;i++){const a=(i===0&&s.lv==="over")?s.due:TAX;cum+=a;fc.push({d:d0,a,cum});d0=(i===0&&s.lv==="over"?now:d0)+WEEK}}
+    const n30=L?fc.filter(x=>x.d<=now+30*DAY).reduce((a,x)=>a+x.a,0):0;
+    v.innerHTML=`<div class="top"><h2>Податок на бізнес</h2><div>${canPay()?`<button class="btn big" id="txpay">🧾 ${s.lv==="none"?"Зафіксувати перший платіж":"Сплатити "+money(amount)}</button>`:""}</div></div>
+    <div class="card txr"><svg viewBox="0 0 130 130"><circle cx="65" cy="65" r="${Rr}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="11"/><circle cx="65" cy="65" r="${Rr}" fill="none" stroke="${col}" stroke-width="11" stroke-linecap="round" stroke-dasharray="${C}" stroke-dashoffset="${C*(1-pr)}" transform="rotate(-90 65 65)" style="filter:drop-shadow(0 0 8px ${col})"/><text x="65" y="72" text-anchor="middle" fill="${col}" font-size="30" font-weight="800">${center}</text><text x="65" y="92" text-anchor="middle" fill="#8ea6b5" font-size="10">${s.lv==="over"?"прострочено":s.lv==="none"?"":"днів лишилось"}</text></svg>
+    <div style="flex:1;min-width:260px"><h2 style="color:${col}">${lbl}</h2>
+    <p class="meta">Податок ${money(TAX)} на тиждень. Таймер на 7 днів запускається в момент оплати, час береться з сервера (Київ).${L?` Дедлайн: <b>${fdt(s.D)}</b>.`:""}</p>
+    ${L?`<div class="txt">${tl}</div>`:""}
+    ${s.lv==="over"?`<div class="txov">Прострочено на ${left(s.over)} · не сплачено тижнів: ${s.k} × ${money(TAX)} = ${money(s.due)}${ACCRUE?". Кожні наступні 7 днів додають ще "+money(TAX):""}</div>`:""}</div></div>
+    <div class="scs" style="margin-top:14px">
+    <div class="card sc"><div class="sh"><span>${s.lv==="over"?"Прострочено":"До дедлайну"}</span><i class="ci">⏳</i></div><b class="txbig ${cls}" id="txCount">${!L?"—":s.lv==="over"?left(s.over,true):left(s.rem,true)}</b><small>${L?(s.lv==="over"?"після "+fdt(s.D):"до "+fdt(s.D)):"ще не було платежів"}</small></div>
+    ${sc("До сплати","💰",money(s.lv==="over"?s.due:0),s.lv==="over"?s.k+" × "+money(TAX):"наступний платіж "+money(TAX),s.lv==="over"?"er":"gd")}
+    ${sc("Останній платіж","📅",L?fdt(L.paidAt):"—",L?"сплатив "+esc(L.payer||"—"):"")}
+    ${sc("Сплачено всього","🧾",money(tot),asc.length+" платежів","ok")}
+    ${TN.bal!=null?sc("Каса аптеки","🏦",money(TN.bal),TN.bal>=amount?"вистачає на "+Math.floor(TN.bal/TAX)+" тиж.":"не вистачає "+money(amount-TN.bal),TN.bal>=amount?"ok":"er"):""}</div>
+    <div class="two"><div class="card"><div class="ch"><h3>Календар платежів</h3><span class="bdg gd">≈ ${money(n30)} за 30 днів</span></div>${fc.length?tbl([["i","№",o=>o.i],["d","Дедлайн (Київ)",o=>`<b>${fdt(o.d)}</b>`],["a","Сума",o=>`<b class="gd">${money(o.a)}</b>`],["cum","Наростаючим",o=>money(o.cum)]],fc.map((x,i)=>({...x,i:i+1}))):'<p class="meta">Після першого платежу тут з\'явиться календар.</p>'}<p class="meta" style="margin-top:8px">Прогноз: якщо платити рівно в дедлайн.</p></div>
+    <div class="card"><div class="ch"><h3>Дисципліна</h3></div>
+    <div class="rw"><span>Платежів вчасно</span><b class="${cmp<=0||on===cmp?"ok":"er"}">${cmp>0?on+" із "+cmp+" ("+Math.round(on/cmp*100)+"%)":"—"}</b></div>
+    <div class="rw"><span>Найбільше запізнення</span><b class="${maxLate>0?"er":"ok"}">${cmp>0?(maxLate>0?left(maxLate):"немає"):"—"}</b></div>
+    <div class="rw"><span>Середній інтервал між платежами</span><b>${gaps.length?(avg/DAY).toFixed(1)+" дн.":"—"}</b></div>
+    <div class="rw"><span>Правило</span><b>7 днів від оплати</b></div></div></div>
+    <div class="card" style="margin-top:14px"><div class="ch"><h3>Історія платежів</h3></div>${tbl([["paidAt","Дата й час (Київ)",o=>fdt(o.paidAt)],["payer","Хто сплатив"],["amount","Сума",o=>`<b class="gd">${money(o.amount)}</b>`],["w","Тижнів",o=>{const w=o.amount/TAX;return Number.isInteger(w)?"× "+w:bdg("нестандартна","wr")}],["l","Своєчасність",o=>{const l=late[o.id];return l===undefined?bdg("перший","mu"):l<=0?bdg("вчасно","ok"):bdg("+"+left(l),"er")}],["by","Вніс"],["note","Примітка"],["a","",o=>isAdmin()&&!S.preview?ra(o.id,[["del","✕"]]):""]],TN.rows)}</div>`;
+  };
+  draw();
+  timer=setInterval(()=>{
+    const el=document.getElementById("txCount");
+    if(!el||t!==S.cur||!v.isConnected){clearInterval(timer);return}
+    const s=state(nowMs());
+    if(s.lv!==lastLv&&!v.querySelector(".pnl")&&!document.querySelector(".ann"))return draw();
+    el.textContent=!TN.last?"—":s.lv==="over"?left(s.over,true):left(s.rem,true);
+  },1000);
+  v.onclick=async e=>{
+    if(e.target.closest("#txpay"))return payFlow(draw);
+    const b=e.target.closest("[data-a]");
+    if(b&&b.dataset.a==="del"&&isAdmin()&&!S.preview)return sure("Видалити цей платіж? Таймер перерахується за попереднім платежем.",async()=>{if(await act("tax.delete",{id:b.dataset.id},"Платіж видалено")){S.c={};await pull();banner();draw()}});
+  };
+};
+
+/* ---------- оплата: сума й час визначаються самі ---------- */
+async function payFlow(redraw){
+  await pull();
+  const now=nowMs(),s=state(now),k=s.lv==="over"?s.k:1,amount=TAX*k,L0=TN.last?TN.last.paidAt:null,id0=TN.last?TN.last.id:null;
+  const early=s.lv==="ok"||s.lv==="warn"&&s.rem>DAY||s.lv==="crit"&&s.rem>DAY;
+  const justPaid=TN.last&&now-TN.last.paidAt<36e5;
+  const m=pnl(`<div class="ph2"><h3>🧾 Оплата податку</h3><button class="btn ghost x">✕</button></div>
+  <div class="rw"><span>${s.lv==="over"?"Прострочено тижнів":"Тижнів до сплати"}</span><b>${k} × ${money(TAX)}</b></div>
+  <div class="rw"><span>Сума до сплати</span><b class="gd" style="font-size:22px">${money(amount)}</b></div>
+  <div class="rw"><span>Час оплати (сервер, Київ)</span><b id="txw">${fdt(now)}</b></div>
+  <div class="rw"><span>Новий дедлайн</span><b id="txn" class="ok">${fdt(now+WEEK)}</b></div>
+  ${TN.bal!=null?`<div class="rw"><span>Каса зараз</span><b class="${TN.bal>=amount?"ok":"er"}">${money(TN.bal)}</b></div>`:""}
+  ${early?`<div class="warn">До дедлайну ще ${left(s.rem)}. Оплата зараз запустить новий 7-денний таймер від цього моменту: невикористаний час не переноситься. Найвигідніше платити в останній день.</div>`:""}
+  ${justPaid?`<div class="warn">Останній платіж був ${left(now-TN.last.paidAt)} тому. Не платите двічі без потреби.</div>`:""}
+  <label>Хто сплатив (у грі)</label><input id="txp" value="${esc((S.user&&S.user.name)||"")}">
+  <label>Примітка (необов'язково)</label><input id="txm">
+  ${isAdmin()?`<label class="sw"><input type="checkbox" id="txb2"><i></i><span>Оплату було раніше (зазначити час вручну)</span></label><div id="txbw" class="hide"><label>Коли було сплачено (київський час)</label><input id="txd" type="datetime-local" min="${L0?kyivLocal(L0):""}" max="${kyivLocal(now)}" value="${kyivLocal(now)}"></div>`:""}
+  <div class="err" id="fe"></div><div class="acts"><button class="btn big" id="txgo">Сплатити ${money(amount)}</button><button class="btn ghost x">Скасувати</button></div>`);
+  const g=q=>m.querySelector(q);
+  m.querySelectorAll(".x").forEach(b=>b.onclick=()=>m.remove());
+  const when=()=>{if(g("#txb2")&&g("#txb2").checked){const ms=kyivMs(g("#txd").value);return Number.isFinite(ms)?ms:NaN}return nowMs()};
+  const upd=()=>{const w=when();if(Number.isFinite(w)){g("#txw").textContent=fdt(w);g("#txn").textContent=fdt(w+WEEK)}};
+  if(g("#txb2")){g("#txb2").onchange=()=>{g("#txbw").classList.toggle("hide",!g("#txb2").checked);upd()};g("#txd").oninput=upd}
+  const sb=g("#txgo");
+  sb.onclick=async()=>{
+    const fe=g("#fe");fe.textContent="";
+    const payer=g("#txp").value.trim();if(!payer){fe.textContent="Вкажіть, хто сплатив";return}
+    sb.disabled=true;sb.innerHTML='<span class="spin"></span>Перевіряю…';
+    try{
+      await pull();
+      const n2=nowMs(),s2=state(n2),k2=s2.lv==="over"?s2.k:1;
+      if((TN.last?TN.last.paidAt:null)!==L0||(TN.last?TN.last.id:null)!==id0)throw new Error("Хтось щойно вніс платіж. Закрийте вікно й відкрийте знову.");
+      if(k2!==k)throw new Error("Минув ще один тиждень: сума змінилась до "+money(TAX*k2)+". Відкрийте вікно знову.");
+      const w=when();
+      if(!Number.isFinite(w))throw new Error("Вкажіть коректні дату й час");
+      if(L0!==null&&w<L0)throw new Error("Час оплати не може бути раніше за попередній платіж ("+fdt(L0)+")");
+      if(w>n2+6e4)throw new Error("Час оплати не може бути в майбутньому");
+      if(TN.bal!=null&&TN.bal<amount&&!confirm("У касі "+money(TN.bal)+", а податок "+money(amount)+". Каса піде в мінус. Продовжити?"))throw new Error("Скасовано");
+      const note=(k+" тиж. × $"+TAX)+(g("#txm").value.trim()?" · "+g("#txm").value.trim():"")+(g("#txb2")&&g("#txb2").checked?" · внесено заднім числом":"");
+      await api("tax.pay",{paidAt:w,amount,payer,note});
+      S.c={};await pull();banner();
+      const L=TN.last,okSrv=L&&Math.abs(L.paidAt-w)<2000&&Math.abs(L.amount-amount)<0.005;
+      m.remove();receipt({amount,k,w,payer,prevD:L0!==null?L0+WEEK:null,over:s2.lv==="over"?s2.over:0,okSrv});
+      toast("Податок сплачено: "+money(amount));sfx("done");
+      if(redraw)redraw();
+    }catch(e){fe.textContent=e.message;sb.disabled=false;sb.textContent="Сплатити "+money(amount)}
+  };
+}
+function receipt(r){
+  const o=document.createElement("div");o.className="ann";
+  o.innerHTML=`<div style="text-align:left;width:min(520px,100%)"><h3>🧾 Квитанція про оплату податку</h3>
+  <div class="rw"><span>Сума</span><b class="gd">${money(r.amount)}</b></div>
+  <div class="rw"><span>Тижнів</span><b>${r.k} × ${money(TAX)}</b></div>
+  <div class="rw"><span>Час оплати (Київ)</span><b>${fdt(r.w)}</b></div>
+  <div class="rw"><span>Сплатив</span><b>${esc(r.payer)}</b></div>
+  ${r.prevD?`<div class="rw"><span>Попередній дедлайн</span><b>${fdt(r.prevD)}${r.over?" (прострочено на "+left(r.over)+")":""}</b></div>`:""}
+  <div class="rw"><span>Новий дедлайн</span><b class="ok">${fdt(r.w+WEEK)}</b></div>
+  ${r.okSrv?'<div class="note" style="margin-top:12px">✓ Платіж підтверджено сервером: час і сума збігаються.</div>':'<div class="warn">⚠ Сервер повернув інші дані, ніж надіслано. Перевірте «Історію платежів».</div>'}
+  <div class="acts"><button class="btn" id="rcx">Зрозуміло</button></div></div>`;
+  document.body.append(o);o.querySelector("#rcx").onclick=()=>o.remove();
+}
+})();
+</script>
+<!-- ====== кінець патча V12 ====== -->
 </body>
 </html>
