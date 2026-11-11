@@ -3089,5 +3089,241 @@ VIEWS.admin=function(v){
 })();
 </script>
 <!-- ====== кінець патча V10 ====== -->
+  <!-- ====== ПАТЧ V11: вставити ПІСЛЯ патча V10, прямо ПЕРЕД </body> ====== -->
+<script>
+/*PATCH_V11 — склад із колонками трав, «Аналітика та аудит складу», «Калькулятор собівартості»*/
+(function(){
+"use strict";
+const NUM=n=>Number.isFinite(+n)?Math.round(+n):0;
+const perms=()=>String((S.user&&S.user.perms)||"").split(",").map(s=>s.trim());
+const canEd=()=>isAdmin()||perms().includes("stock_edit");
+const pc=n=>{const p=S.prices[n];return p==null?null:Math.round(+p*100)};      /* ціна в центах */
+const mc=c=>money(c/100);
+const bar=p=>`<span class="bar"><i style="width:${Math.max(0,Math.min(100,p))}%"></i></span>`;
+const tsOf=t=>{const s=String(t||"");let m=s.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?/);
+  if(m)return new Date(+m[1],+m[2]-1,+m[3],+m[4],+m[5],+(m[6]||0)).getTime();
+  m=s.match(/^(\d{2})\.(\d{2})\.(\d{4})[ ,T]+(\d{2}):(\d{2})/);if(m)return new Date(+m[3],+m[2]-1,+m[1],+m[4],+m[5]).getTime();
+  m=s.match(/^(\d{4})-(\d{2})-(\d{2})$/);if(m)return new Date(+m[1],+m[2]-1,+m[3]).getTime();return 0};
+const parD=v=>{const x=parseFloat(String(v).replace(/[−–]/g,"-").replace("+","").replace(",","."));return Number.isFinite(x)?x:0};
+const fmtDt=ms=>ms?new Intl.DateTimeFormat("uk-UA",{timeZone:"Europe/Kyiv",day:"2-digit",month:"2-digit",year:"numeric",hour:"2-digit",minute:"2-digit"}).format(new Date(ms)):"—";
+
+/* =====================================================================
+   1. СКЛАД АПТЕКИ: колонки трав — чіпи в одному ряду з категоріями
+   ===================================================================== */
+let SF={q:"",c:"",h:null,low:false};
+VIEWS.stock=function(v){
+  v.onclick=null;v.oninput=null;
+  let D=null,HC={cols:[],map:{},herb:new Set()};
+  const ed=canEd(),low=i=>i.min>0&&NUM(i.qty)<=i.min;
+  const inH=i=>SF.h===""?(HC.herb.has(i.name)&&!HC.map[i.name]):HC.map[i.name]===SF.h;
+  const list=()=>{const q=SF.q.trim().toLowerCase();return D.items.filter(i=>(!SF.c||i.category===SF.c)&&(SF.h==null||inH(i))&&(!SF.low||low(i))&&(!q||i.name.toLowerCase().includes(q)))};
+  const tb=()=>tbl([["name","Назва",o=>`<b>${esc(o.name)}</b>`],["category","Категорія"],["loc","Місце",o=>esc(o.loc||"—")],["qty","К-сть",o=>`<b class="${low(o)?"lowq":""}">${NUM(o.qty)}</b>${low(o)?" "+bdg("мало","er"):""}`],["listed","На продажі",o=>o.listed?bdg(o.listed+" шт","gd"):"—"],["min","Мін."],["unit","Од."],["updated","Змінено"],["a","",o=>ed?`<div class="ra"><button class="btn ghost" data-a="edit" data-id="${esc(o.id)}">Змінити</button><button class="btn ghost" data-op="set" data-id="${esc(o.id)}">± К-сть</button></div>`:""]],list());
+  const head=()=>{
+    const cap=CONFIG.CAPACITY||0,tot=D.total!=null?NUM(D.total):D.items.reduce((a,i)=>a+NUM(i.qty),0),ln=D.items.filter(low).length,
+      val=D.items.reduce((a,i)=>a+NUM(i.qty)*(pc(i.name)||0),0),cats=[...new Set(D.items.map(i=>i.category))],pct=cap?Math.round(tot/cap*100):0;
+    const hch=HC.cols.map(c=>`<span class="chip ${SF.h===c.id?"on":""}" data-h="${esc(c.id)}">🌿 ${esc(c.name)} (${D.items.filter(i=>HC.map[i.name]===c.id).length})</span>`).join("");
+    const noc=HC.cols.length&&[...HC.herb].some(n=>!HC.map[n])?`<span class="chip ${SF.h===""?"on":""}" data-h="">🌿 Без колонки</span>`:"";
+    const mk=isAdmin()&&!HC.cols.length?'<span class="chip" data-hset="1">＋ Створити колонку трав</span>':"";
+    return`<div class="scs">${sc("Всього на складі","📦",tot,cap?"із "+cap+" · заповнено "+pct+"%":"одиниць")}${sc("Позицій","🧪",D.items.length,"Найменувань")}${sc("Низькі залишки","⚠️",ln,"Потребують поповнення",ln?"er":"")}${sc("Вартість запасу","💰",money(val/100),"за вказаними цінами","gd")}</div>
+    <div class="tools"><input id="fq" placeholder="🔍 Пошук за назвою" value="${esc(SF.q)}"><span class="chip ${SF.low?"on":""}" data-lw="1">⚠️ Лише низькі</span></div>
+    <div class="chips"><span class="chip ${!SF.c&&SF.h==null?"on":""}" data-c="">Усі</span>${cats.map(c=>`<span class="chip ${SF.c===c&&SF.h==null?"on":""}" data-c="${esc(c)}">${esc(c)}</span>`).join("")}${hch}${noc}${mk}</div>`};
+  const body=()=>`<div id="stt">${tb()}</div>`;
+  const paint=()=>{const pb=$("#pb");if(pb&&D)pb.innerHTML=head()+body()};
+  const edit=o=>form("Змінити: "+o.name,[{k:"qty",l:"Кількість на складі",t:"number",v:o.qty},{k:"min",l:"Мінімальний залишок",t:"number",v:o.min},{k:"loc",l:"Місце зберігання",v:o.loc},
+    ...(isAdmin()?[{k:"category",l:"Категорія",o:[...CATS,"Сировина"],v:o.category},{k:"unit",l:"Одиниця обліку",v:o.unit},{k:"note",l:"Примітка",v:o.note}]:[]),
+    {k:"reason",l:"Причина (обов'язково, якщо змінюєте кількість)"}],async x=>{await api("inventory.edit",{itemId:o.id,...x});toast("Збережено");S.bp=loadRef();go("stock")});
+  const p=page(v,"Склад аптеки","inventory.list",{},d=>{D=d;return head()+body()},
+    `<button class="btn" id="b1">Операція зі складом</button>${canEd()?'<button class="btn ghost" id="b3">Імпорт зі списку</button>':""}${isAdmin()?'<button class="btn ghost" id="b2">Новий предмет</button>':""}`);
+  v.oninput=e=>{if(e.target.id==="fq"&&D){SF.q=e.target.value;$("#stt").innerHTML=tb()}};
+  v.onclick=e=>{if(!D)return;const T=e.target,c=T.closest("[data-c]"),h=T.closest("[data-h]"),lw=T.closest("[data-lw]"),hs=T.closest("[data-hset]"),b=T.closest("#stt [data-a]");
+    if(c){SF.c=c.dataset.c;SF.h=null;return paint()}
+    if(h){SF.h=h.dataset.h;SF.c="";return paint()}
+    if(lw){SF.low=!SF.low;return paint()}
+    if(hs){AT="herbs";return go("admin")}
+    if(b){const o=D.items.find(i=>i.id===b.dataset.id);if(o)edit(o)}};
+  if($("#b1"))$("#b1").onclick=()=>stockOp();
+  if($("#b2"))$("#b2").onclick=()=>form("Новий предмет",[{k:"name",l:"Назва"},{k:"category",l:"Категорія",o:[...CATS,"Сировина"]},{k:"unit",l:"Одиниця обліку",v:"шт"},{k:"min",l:"Мінімальний залишок",t:"number"},{k:"note",l:"Примітка"}],async x=>{await api("inventory.addItem",x);S.bp=loadRef();go("stock")});
+  if($("#b3"))$("#b3").onclick=()=>window.bulkForm&&window.bulkForm();
+  /* колонки трав (створюються в Адмін → Трави (колонки)) */
+  api("stock.herbs").then(h=>{if(!h)return;HC.cols=h.cols||[];HC.map={};HC.herb=new Set();(h.items||[]).forEach(i=>{HC.herb.add(i.name);if(i.col)HC.map[i.name]=i.col});if(v.isConnected&&D)paint()}).catch(()=>{});
+  p.then(d=>{if(!d)return;api("inventory.history").then(h=>{if(!v.isConnected)return;const old=v.querySelector("#hist");if(old)old.remove();
+    v.insertAdjacentHTML("beforeend",`<div class="card" id="hist" style="margin-top:14px"><h3>Історія руху</h3>${tbl([["time","Час"],["user","Користувач"],["item","Предмет"],["delta","Зміна",o=>`<b class="${parD(o.delta)>=0?"ok":"er"}">${esc(o.delta)}</b>`],["reason","Причина"]],h)}</div>`)}).catch(()=>{})});
+};
+
+/* =====================================================================
+   2. АНАЛІТИКА ТА АУДИТ СКЛАДУ (лише читає, нічого не змінює)
+   ===================================================================== */
+let AUS="over",AW=7,AST=30;
+async function loadA(){
+  const [L,H,R,AI,BT]=await Promise.all([api("inventory.list",{}),api("inventory.history").catch(()=>[]),api("admin.recipes").catch(()=>[]),api("admin.items").catch(()=>[]),api("boot").catch(()=>null)]);
+  const items=L.items||[],sum=items.reduce((a,i)=>a+NUM(i.qty),0);
+  return{L,items,sum,total:L.total!=null?NUM(L.total):sum,hist:(H||[]).map(o=>({...o,ts:tsOf(o.time),d:parD(o.delta)})),R:R||[],AI:AI||[],BT};
+}
+const val=i=>NUM(i.qty)*(pc(i.name)||0);
+const A_over=A=>{
+  const it=A.items,cap=CONFIG.CAPACITY||0,V=it.reduce((a,i)=>a+val(i),0),zero=it.filter(i=>NUM(i.qty)===0),lw=it.filter(i=>i.min>0&&NUM(i.qty)>0&&NUM(i.qty)<=i.min),nop=it.filter(i=>NUM(i.qty)>0&&pc(i.name)==null),pct=cap?Math.round(A.total/cap*100):0;
+  const cats={};it.forEach(i=>{const c=cats[i.category]=cats[i.category]||{k:i.category,n:0,q:0,v:0};c.n++;c.q+=NUM(i.qty);c.v+=val(i)});
+  const cl=Object.values(cats).sort((a,b)=>b.q-a.q),mxq=Math.max(1,...cl.map(c=>c.q));
+  const top=(f,n)=>it.slice().sort((a,b)=>f(b)-f(a)).slice(0,n);
+  return`<div class="scs">${sc("Позицій","🧪",it.length,"у довіднику")}${sc("Одиниць","📦",A.total,cap?"із "+cap+" · "+pct+"%":"на складі")}${sc("Вартість запасу","💰",money(V/100),"за вказаними цінами","gd")}${sc("Нульові","⭕",zero.length,"залишок 0",zero.length?"er":"ok")}${sc("Низькі","⚠️",lw.length,"≤ мінімуму",lw.length?"er":"ok")}${sc("Без ціни","🏷️",nop.length,"є запас, ціни немає",nop.length?"er":"ok")}</div>
+  ${cap?`<div class="card"><div class="ch"><h3>Заповненість складу</h3><b class="gd">${A.total} / ${cap} (${pct}%)</b></div>${bar(pct)}<p class="meta">Вільно: ${Math.max(0,cap-A.total)} од.</p></div>`:""}
+  <div class="two" style="margin-top:14px"><div class="card"><div class="ch"><h3>За категоріями</h3></div>${cl.map(c=>`<div class="hbr"><span>${esc(c.k)} <small class="meta">· ${c.n} поз.</small></span>${bar(c.q/mxq*100)}<b class="gd">${c.q}</b></div>`).join("")}<div class="rw" style="margin-top:6px"><span>Вартість по категоріях</span><span></span></div>${cl.map(c=>`<div class="rw"><span>${esc(c.k)}</span><b>${money(c.v/100)}</b></div>`).join("")}</div>
+  <div class="card"><div class="ch"><h3>Топ-10 за вартістю запасу</h3></div>${tbl([["name","Предмет",o=>`<b>${esc(o.name)}</b>`],["qty","К-сть"],["p","Ціна/од.",o=>pc(o.name)==null?"—":mc(pc(o.name))],["v","Вартість",o=>`<b class="gd">${mc(val(o))}</b>`]],top(val,10).filter(i=>val(i)>0))}</div></div>
+  <div class="two"><div class="card"><div class="ch"><h3>Топ-10 за кількістю</h3></div>${tbl([["name","Предмет",o=>`<b>${esc(o.name)}</b>`],["category","Категорія"],["qty","К-сть",o=>`<b>${NUM(o.qty)}</b>`]],top(i=>NUM(i.qty),10))}</div>
+  <div class="card"><div class="ch"><h3>Нульові та низькі</h3></div>${tbl([["name","Предмет",o=>`<b>${esc(o.name)}</b>`],["qty","К-сть",o=>`<b class="er">${NUM(o.qty)}</b>`],["min","Мін."],["s","",o=>NUM(o.qty)===0?bdg("немає","er"):bdg("мало","wr")]],[...zero,...lw])}</div></div>`;
+};
+const A_move=A=>{
+  const now=Date.now(),H=A.hist,parsed=H.some(o=>o.ts),from=now-AW*864e5,W=parsed?H.filter(o=>o.ts>=from):H;
+  const inn=W.filter(o=>o.d>0),out=W.filter(o=>o.d<0),su=a=>a.reduce((s,o)=>s+o.d,0);
+  const U={},I={};W.forEach(o=>{const u=U[o.user]=U[o.user]||{u:o.user,n:0,p:0,m:0};u.n++;if(o.d>0)u.p+=o.d;else u.m+=o.d;const t=I[o.item]=I[o.item]||{i:o.item,n:0,p:0,m:0};t.n++;if(o.d>0)t.p+=o.d;else t.m+=o.d});
+  const dc=o=>`<b class="${o.d>=0?"ok":"er"}">${o.d>0?"+":""}${o.d}</b>`;
+  return`<div class="chips">${[1,7,30,90].map(d=>`<span class="chip ${AW===d?"on":""}" data-aw="${d}">${d===1?"24 год":d+" дн."}</span>`).join("")}</div>
+  ${parsed?"":'<div class="note">Формат часу в журналі не розпізнано, показано всі записи.</div>'}
+  <div class="scs">${sc("Операцій","🔄",W.length,"у журналі руху")}${sc("Надходження","📥","+"+su(inn),inn.length+" операцій","ok")}${sc("Списання","📤",su(out),out.length+" операцій","er")}${sc("Баланс","⚖️",(su(W)>0?"+":"")+su(W),"надходження − списання",su(W)>=0?"ok":"er")}</div>
+  <div class="two"><div class="card"><div class="ch"><h3>За користувачами</h3></div>${tbl([["u","Користувач",o=>`<b>${esc(o.u)}</b>`],["n","Операцій"],["p","Надійшло",o=>`<b class="ok">+${o.p}</b>`],["m","Списано",o=>`<b class="er">${o.m}</b>`]],Object.values(U).sort((a,b)=>b.n-a.n))}</div>
+  <div class="card"><div class="ch"><h3>Найактивніші предмети</h3></div>${tbl([["i","Предмет",o=>`<b>${esc(o.i)}</b>`],["n","Операцій"],["p","+",o=>`<b class="ok">+${o.p}</b>`],["m","−",o=>`<b class="er">${o.m}</b>`]],Object.values(I).sort((a,b)=>b.n-a.n).slice(0,12))}</div></div>
+  <div class="card" style="margin-top:14px"><div class="ch"><h3>Останні операції</h3></div>${tbl([["time","Час"],["user","Хто"],["item","Предмет",o=>`<b>${esc(o.item)}</b>`],["d","Зміна",dc],["reason","Причина"]],W.slice(0,50))}</div>`;
+};
+const A_stale=A=>{
+  const now=Date.now(),l=A.items.map(i=>({...i,t:tsOf(i.updated),age:i.updated?(now-tsOf(i.updated))/864e5:null})).filter(i=>NUM(i.qty)>0&&i.age!=null&&i.age>=AST).sort((a,b)=>b.age-a.age);
+  const dead=l.reduce((a,i)=>a+val(i),0);
+  return`<div class="chips">${[7,14,30,60].map(d=>`<span class="chip ${AST===d?"on":""}" data-as="${d}">без руху ≥ ${d} дн.</span>`).join("")}</div>
+  <div class="scs">${sc("Позицій","🕸️",l.length,"без руху ≥ "+AST+" дн.")}${sc("Одиниць","📦",l.reduce((a,i)=>a+NUM(i.qty),0),"лежить без руху")}${sc("Заморожено","🧊",money(dead/100),"вартість за вказаними цінами","gd")}</div>
+  <div class="card">${tbl([["name","Предмет",o=>`<b>${esc(o.name)}</b>`],["category","Категорія"],["qty","К-сть"],["updated","Остання зміна"],["age","Днів",o=>`<b class="${o.age>=60?"er":"gd"}">${Math.floor(o.age)}</b>`],["v","Вартість",o=>pc(o.name)==null?"—":mc(val(o))]],l)}</div>`;
+};
+const A_integ=A=>{
+  const items=A.items,names=new Set(items.map(i=>i.name)),blocks=[];let problems=0;
+  const sec=(t,list,okText)=>{problems+=list.length;blocks.push(`<div class="card" style="margin-top:12px"><div class="ch"><h3>${t}</h3>${list.length?bdg(list.length+" проблем","er"):bdg("ок","ok")}</div>${list.length?list.map(x=>`<div class="rw"><span>${x}</span></div>`).join(""):`<p class="meta">${okText}</p>`}</div>`)};
+  sec("Некоректні залишки",items.filter(i=>!Number.isInteger(+i.qty)||+i.qty<0).map(i=>`<b>${esc(i.name)}</b>: ${esc(String(i.qty))}`),"Усі залишки цілі й не від'ємні.");
+  const cnt={};(A.AI.length?A.AI.filter(i=>i.active):items).forEach(i=>{const k=i.name.trim().toLowerCase();(cnt[k]=cnt[k]||[]).push(i.name)});
+  sec("Дублікати предметів",Object.values(cnt).filter(a=>a.length>1).map(a=>`<b>${esc(a[0])}</b> ×${a.length}`),"Дублікатів назв немає.");
+  sec("Сума позицій і «Всього»",(A.L.total!=null&&NUM(A.L.total)!==A.sum)?[`Сума позицій ${A.sum}, сервер повертає «Всього» ${NUM(A.L.total)}`]:[],`Сума позицій = ${A.sum}, збігається з «Всього».`);
+  const bi=A.BT&&A.BT.inv?Object.entries(A.BT.inv).filter(([n,q])=>names.has(n)&&NUM(q)!==NUM((items.find(i=>i.name===n)||{}).qty)).map(([n,q])=>`<b>${esc(n)}</b>: у «boot» ${NUM(q)}, у складі ${NUM((items.find(i=>i.name===n)||{}).qty)}`):[];
+  sec("Два джерела цифр на сервері",bi,"Дані для крафту й дані складу збігаються.");
+  const rp=[];(A.R).filter(r=>!r.archived&&!r.na).forEach(r=>{
+    if(!Number.isInteger(+r.yield)||+r.yield<1)rp.push(`<b>${esc(r.name)}</b>: некоректний вихід (${esc(String(r.yield))})`);
+    if(!Number.isInteger(+r.time)||+r.time<0)rp.push(`<b>${esc(r.name)}</b>: некоректний час (${esc(String(r.time))})`);
+    if(!names.has(r.name))rp.push(`<b>${esc(r.name)}</b>: препарату немає у складі`);
+    Object.entries(r.ing||{}).forEach(([n,q])=>{if(!Number.isInteger(+q)||+q<1)rp.push(`<b>${esc(r.name)}</b>: «${esc(n)}» має кількість ${esc(String(q))}`);if(!names.has(n))rp.push(`<b>${esc(r.name)}</b>: інгредієнта «${esc(n)}» немає у складі`)})});
+  sec("Рецепти",rp,"Усі рецепти мають коректні числа й існуючі інгредієнти.");
+  const nop=items.filter(i=>NUM(i.qty)>0&&pc(i.name)==null).map(i=>`<b>${esc(i.name)}</b>: запас ${NUM(i.qty)}, ціни немає`);
+  sec("Предмети без ціни",nop,"Для всіх предметів із запасом вказано ціну.");
+  const sm={};A.hist.forEach(o=>{sm[o.item]=(sm[o.item]||0)+o.d});
+  const jr=items.map(i=>({n:i.name,q:NUM(i.qty),j:Math.round(sm[i.name]||0)})).filter(x=>x.q!==x.j).sort((a,b)=>Math.abs(b.q-b.j)-Math.abs(a.q-a.j));
+  blocks.push(`<div class="card" style="margin-top:12px"><div class="ch"><h3>Журнал руху проти залишку</h3>${bdg("довідково","tl")}</div><p class="meta">Записів у журналі: ${A.hist.length}. «Поза журналом» = залишок − сума змін у журналі. Ненульове число означає, що частина змін не потрапила в журнал руху (стартовий залишок, крафти, що пишуться окремо, або правка таблиці вручну). Це не завжди помилка.</p>${tbl([["n","Предмет",o=>`<b>${esc(o.n)}</b>`],["q","Залишок"],["j","За журналом"],["d","Поза журналом",o=>`<b class="${o.d>=0?"ok":"er"}">${o.d>0?"+":""}${o.d}</b>`]],jr.slice(0,40).map(x=>({...x,d:x.q-x.j})))}</div>`);
+  return`<div class="scs">${sc("Знайдено проблем","🛡️",problems,problems?"потребують уваги":"усе чисто",problems?"er":"ok")}</div>${blocks.join("")}`;
+};
+TABS.audit=async function(b){
+  b.innerHTML=SK;let A;
+  try{A=await loadA()}catch(e){b.innerHTML=`<p class="meta">${esc(e.message)}</p>`;return}
+  const draw=()=>{
+    const T=[["over","📊 Огляд"],["move","🔄 Рух"],["stale","🕸 Застарілі запаси"],["integ","🛡 Цілісність"]],F={over:A_over,move:A_move,stale:A_stale,integ:A_integ};
+    b.innerHTML=`<div class="chips">${T.map(t=>`<span class="chip ${AUS===t[0]?"on":""}" data-au="${t[0]}">${t[1]}</span>`).join("")}<span class="chip" data-au="reload">↻ Оновити</span></div><div id="aub">${F[AUS](A)}</div>`;
+  };
+  draw();
+  b.onclick=async e=>{
+    const a=e.target.closest("[data-au]"),w=e.target.closest("[data-aw]"),s=e.target.closest("[data-as]");
+    if(a){if(a.dataset.au==="reload")return TABS.audit(b);AUS=a.dataset.au;return draw()}
+    if(w){AW=+w.dataset.aw;return draw()}
+    if(s){AST=+s.dataset.as;return draw()}
+  };
+};
+
+/* =====================================================================
+   3. КАЛЬКУЛЯТОР СОБІВАРТОСТІ: звідки предмет, за яку ціну, в якій кількості
+   ===================================================================== */
+PAGES.splice(PAGES.findIndex(p=>p[0]==="scheme")+1,0,["ledger","📐","Калькулятор собівартості"]);NP.ledger="craft";
+let LG={cat:0,rid:null,qty:null,stock:true,pm:"market",open:new Set()};
+const PMN={market:"ринкова (з «Цін»)",last:"остання закупівля",avg:"середня закупівля",min:"найдешевша закупівля"};
+VIEWS.ledger=async function(v){
+  const t=S.cur;v.onclick=null;v.oninput=null;v.onchange=null;
+  v.innerHTML=`<div class="top"><h2>Калькулятор собівартості</h2><div></div></div>${SK}`;
+  S.bp=loadRef();await ready();if(t!==S.cur)return;
+  let HL=[],HH=[];
+  try{[HL,HH]=await Promise.all([api("herb.list",{}).catch(()=>[]),api("inventory.history").catch(()=>[]),api("inventory.list",{}).catch(()=>null)])}catch(e){}
+  HH=(HH||[]).map(o=>({...o,ts:tsOf(o.time),d:parD(o.delta)}));
+  if(t!==S.cur)return;
+  /* закупівлі з отриманих замовлень трав: партії (lots) */
+  const LOTS={},PEND={};
+  (HL||[]).forEach(o=>(o.items||[]).forEach(x=>{
+    if(o.status==="Отримано")(LOTS[x.name]=LOTS[x.name]||[]).push({ts:tsOf(o.time),num:parseInt(o.num)||0,sup:o.supplier,time:o.time,qty:NUM(x.qty),c:Math.round(+x.price*100)});
+    else if(o.status==="Замовлено")PEND[x.name]=(PEND[x.name]||0)+NUM(x.qty)}));
+  const ST={};
+  Object.entries(LOTS).forEach(([n,a])=>{a.sort((x,y)=>(y.ts-x.ts)||(y.num-x.num));const q=a.reduce((s,x)=>s+x.qty,0),c=a.reduce((s,x)=>s+x.qty*x.c,0);
+    ST[n]={q,c,avg:q?Math.round(c/q):null,last:a[0].c,min:Math.min(...a.map(x=>x.c)),max:Math.max(...a.map(x=>x.c)),n:a.length}});
+  const unit=n=>{const st=ST[n],o={market:pc(n),last:st?st.last:null,avg:st?st.avg:null,min:st?st.min:null};
+    for(const k of [LG.pm,"market","last","avg","min"])if(o[k]!=null)return{c:o[k],src:k};return{c:null,src:null}};
+  const SRC={market:"ринок",last:"ост. закупівля",avg:"сер. закупівля",min:"мін. закупівля"};
+  const RS=()=>RECIPES.filter(r=>!r.na&&r.ing);
+  const rm=()=>Object.fromEntries(RS().map(r=>[r.name,r]));
+  function plan(name,qty,useStock){
+    const M=rm(),L={};
+    const lv=(n,g=[])=>{if(n in L)return L[n];if(g.includes(n))return 0;L[n]=0;if(M[n])L[n]=1+Math.max(0,...Object.keys(M[n].ing).map(i=>lv(i,[...g,n])));return L[n]};lv(name);
+    const order=Object.keys(L).sort((a,b)=>L[b]-L[a]),need={[name]:qty},cy={},taken={};
+    order.forEach(n=>{const r=M[n];if(!r)return;let q=need[n]||0;if(useStock&&n!==name){taken[n]=Math.min(q,stock(n));q-=taken[n]}if(q<=0)return;
+      cy[n]=Math.ceil(q/r.yield);Object.entries(r.ing).forEach(([i,p])=>need[i]=(need[i]||0)+cy[n]*p)});
+    return{M,order,need,cy,taken};
+  }
+  const ctl=()=>{
+    const rs=RS().filter(r=>r.cat===LG.cat);if(!rs.find(r=>r.id===LG.rid)){LG.rid=rs[0]?rs[0].id:null;const r=rs[0];LG.qty=r?r.yield:1}
+    return`<div class="card"><label>Категорія</label><div class="chips">${CATS.slice(0,7).map((c,i)=>`<span class="chip ${i===LG.cat?"on":""}" data-lc="${i}">${ICON[i]} ${c}</span>`).join("")}</div>
+    <label>Препарат</label><div class="chips">${rs.map(r=>`<span class="chip ${r.id===LG.rid?"on":""}" data-lr="${r.id}">${esc(r.name)}</span>`).join("")||'<span class="meta">Немає рецептів</span>'}</div>
+    <label>Скільки одиниць готового препарату потрібно</label><div class="stp"><button class="btn ghost" data-d="-10">−10</button><button class="btn ghost" data-d="-1">−</button><input id="lq" type="number" min="1" step="1" value="${LG.qty||1}"><button class="btn ghost" data-d="1">+</button><button class="btn ghost" data-d="10">+10</button><button class="btn ghost" data-d="100">+100</button></div>
+    <label>Режим розрахунку</label><div class="chips"><span class="chip ${LG.stock?"on":""}" data-ls="1">📦 Враховувати склад</span><span class="chip ${!LG.stock?"on":""}" data-ls="0">🧾 Повна вартість з нуля</span></div>
+    <label>Яку ціну сировини брати</label><div class="chips">${Object.entries(PMN).map(([k,l])=>`<span class="chip ${LG.pm===k?"on":""}" data-lm="${k}">${l}</span>`).join("")}</div></div>`;
+  };
+  const detail=(n,u,nd,have)=>{
+    const st=ST[n],lots=(LOTS[n]||[]).slice(0,10),mv=HH.filter(o=>o.item===n).slice(0,8),mk=pc(n);
+    return`<tr><td colspan="8" style="background:rgba(255,255,255,.03)"><div class="two" style="margin:0">
+    <div><b>Звідки надходить «${esc(n)}»</b>${st?`<p class="meta">Закуплено всього: <b>${st.q}</b> од. на <b>${mc(st.c)}</b> · партій: ${st.n} · середня <b>${mc(st.avg)}</b> · остання <b>${mc(st.last)}</b> · мін. ${mc(st.min)} · макс. ${mc(st.max)}</p>
+      ${tbl([["time","Дата"],["sup","Постачальник"],["num","№"],["qty","К-сть"],["c","Ціна",o=>mc(o.c)],["s","Сума",o=>`<b class="gd">${mc(o.c*o.qty)}</b>`]],lots)}`:'<p class="meta">Закупівель через «Замовлення трав» немає: ціна лише ринкова або введена вручну.</p>'}
+      ${PEND[n]?`<p class="meta">🚚 В дорозі (замовлено, не отримано): <b>${PEND[n]}</b> од.</p>`:""}
+      <div class="rw"><span>Ринкова ціна/од. ($)</span>${pin(n,S.prices[n],92)}</div>
+      <div class="rw"><span>Запас на складі: ${have} од.</span><b class="gd">${u.c==null?"—":mc(have*u.c)}</b></div></div>
+    <div><b>Останній рух по складу</b>${tbl([["time","Час"],["user","Хто"],["d","Зміна",o=>`<b class="${o.d>=0?"ok":"er"}">${o.d>0?"+":""}${o.d}</b>`],["reason","Причина"]],mv)}</div></div></td></tr>`};
+  const calc=()=>{
+    const r=RS().find(x=>x.id===LG.rid),el=$("#lgo");if(!r||!el){if(el)el.innerHTML="";return}
+    const q=Math.max(1,parseInt(LG.qty)||1),P=plan(r.name,q,LG.stock),M=P.M;
+    const out=P.cy[r.name]*r.yield;
+    const raw=P.order.filter(n=>!M[n]&&P.need[n]>0).map(n=>{const nd=P.need[n],have=stock(n),def=Math.max(0,nd-have),u=unit(n);
+      return{n,nd,have,def,u,full:u.c==null?null:u.c*nd,buy:u.c==null?null:u.c*def}}).sort((a,b)=>(b.full||0)-(a.full||0));
+    const full=raw.reduce((a,x)=>a+(x.full||0),0),buy=raw.reduce((a,x)=>a+(x.buy||0),0),unk=raw.filter(x=>x.u.c==null).length;
+    const sale=pc(r.name),rev=sale==null?null:sale*out,pf=rev==null?null:rev-full,mg=rev?Math.round(pf/rev*1000)/10:null;
+    let time=0;const st=P.order.slice().reverse().filter(n=>P.cy[n]);st.forEach(n=>time+=P.cy[n]*M[n].time);
+    const U={},uc=(n,g=[])=>{if(n in U)return U[n];const x=M[n];if(!x||g.includes(n)){const p=unit(n).c;return U[n]=p==null?0:p}return U[n]=Object.entries(x.ing).reduce((a,[i,p])=>a+p*uc(i,[...g,n]),0)/x.yield};
+    const taken=Object.entries(P.taken).filter(([,k])=>k>0);
+    el.innerHTML=`<div class="scs">${sc("Сировина всього","🧾",mc(full),"повна вартість потреби","gd")}${sc("Докупити","🛒",mc(buy),"лише дефіцит за обраними цінами","er")}${sc("Собівартість / од.","🏷️",out?mc(Math.round(full/out)):"—","випуск: "+out+" од.")}${sc("Виручка","💵",rev==null?"—":mc(rev),sale==null?"ціну продажу не вказано":out+" од. × "+mc(sale),"gd")}${sc("Прибуток","📈",pf==null?"—":mc(pf),mg==null?"виручка − сировина":"маржа "+mg+"%",pf==null?"":pf>=0?"ok":"er")}${sc("Час","⏱️",fmtT(time),st.length+" етап(ів)")}</div>
+    ${unk?`<div class="warn">Для ${unk} поз. немає жодної ціни: підсумок неповний. Введіть ціну в розгорнутій картці предмета.</div>`:""}
+    ${r.skill>mySk()?`<div class="warn">🔒 Для цього препарату потрібне вміння ${r.skill} (у вас ${mySk()}).</div>`:""}
+    <div class="card"><div class="ch"><h3>Сировина: звідки, за яку ціну, скільки</h3><div class="ra" style="margin:0"><button class="btn ghost" id="lcp">📋 Копіювати закупівлю</button><button class="btn ghost" id="lcs">⬇ CSV</button></div></div>
+    <p class="meta">Усі суми = ціна в центах × кількість; підсумок — це точна сума рядків. Клік по рядку розкриває партії закупівлі, постачальників і рух по складу.</p>
+    <div style="overflow-x:auto"><table><tr><th>Сировина</th><th>Потрібно</th><th>На складі</th><th>Дефіцит</th><th>Ціна/од.</th><th>Вартість всього</th><th>Докупити на</th><th></th></tr>
+    ${raw.map(x=>`<tr data-x="${esc(x.n)}" style="cursor:pointer"><td><b>${esc(x.n)}</b></td><td>${x.nd}</td><td>${x.have}</td><td class="${x.def?"bad":""}">${x.def}</td><td>${x.u.c==null?'<span class="er">немає</span>':mc(x.u.c)+' <small class="meta">'+SRC[x.u.src]+"</small>"}</td><td>${x.full==null?"—":mc(x.full)}</td><td>${x.buy==null?"—":'<b class="er">'+mc(x.buy)+"</b>"}</td><td>${LG.open.has(x.n)?"▾":"▸"}</td></tr>${LG.open.has(x.n)?detail(x.n,x.u,x.nd,x.have):""}`).join("")}
+    <tr><td><b>РАЗОМ</b></td><td></td><td></td><td></td><td></td><td><b class="gd">${mc(full)}</b></td><td><b class="er">${mc(buy)}</b></td><td></td></tr></table></div></div>
+    <div class="card" style="margin-top:14px"><div class="ch"><h3>Етапи виробництва</h3></div><div style="overflow-x:auto"><table><tr><th>Рецепт</th><th>Циклів</th><th>Випуск</th><th>Надлишок</th><th>Час</th><th>Вміння</th><th>Собівартість/од. ≈</th></tr>${st.map(n=>{const x=M[n],o=P.cy[n]*x.yield,need=P.need[n]-(P.taken[n]||0);return`<tr><td><b>${esc(n)}</b>${n===r.name?"":" "+bdg("проміжний","tl")}</td><td>${P.cy[n]}</td><td>${o}</td><td>${o-need}</td><td>${fmtT(P.cy[n]*x.time)}</td><td class="${x.skill>mySk()?"bad":""}">${x.skill}</td><td>${mc(Math.round(uc(n)))}</td></tr>`}).join("")}</table></div></div>
+    ${taken.length?`<div class="card" style="margin-top:14px"><div class="ch"><h3>Взято зі складу готовими проміжними</h3></div>${taken.map(([n,k])=>`<div class="rw"><span>${esc(n)}</span><b>${k} із ${stock(n)} на складі</b></div>`).join("")}<p class="meta">Їхню сировину вже витрачено раніше, тому в «Сировина всього» вона не рахується.</p></div>`:""}
+    <div class="rw" style="margin-top:12px"><span>Ціна продажу «${esc(r.name)}» за од. ($)</span>${pin(r.name,S.prices[r.name])}</div>`;
+    el._raw={raw,full,buy,r,q,out};
+  };
+  const paint=()=>{v.innerHTML=`<div class="top"><h2>Калькулятор собівартості</h2><div></div></div>${ctl()}<div id="lgo" style="margin-top:14px"></div>`;calc()};
+  paint();
+  v.oninput=e=>{if(e.target.id==="lq"){LG.qty=Math.max(1,parseInt(e.target.value)||1);calc()}};
+  v.onchange=async e=>{const i=e.target.closest(".pr");if(i&&await setPrice(i.dataset.n,i.value)){calc();toast("Ціну збережено")}};
+  v.onclick=e=>{const T=e.target,lc=T.closest("[data-lc]"),lr=T.closest("[data-lr]"),ls=T.closest("[data-ls]"),lm=T.closest("[data-lm]"),x=T.closest("tr[data-x]");
+    if(lc){LG.cat=+lc.dataset.lc;LG.rid=null;return paint()}
+    if(lr){LG.rid=lr.dataset.lr;const r=RS().find(y=>y.id===LG.rid);LG.qty=r?r.yield:1;return paint()}
+    if(ls){LG.stock=ls.dataset.ls==="1";return paint()}
+    if(lm){LG.pm=lm.dataset.lm;return paint()}
+    if(T.closest("#lcp")){const o=$("#lgo")._raw;if(!o)return;const l=o.raw.filter(y=>y.def>0).map(y=>`${y.n} ×${y.def}${y.u.c!=null?" · "+mc(y.def*y.u.c):""}`);
+      if(!l.length)return toast("Докупляти нічого: усе є на складі");
+      return navigator.clipboard.writeText(`Закупівля для «${o.r.name}» × ${o.q}:\n`+l.join("\n")+`\nРазом: ${mc(o.buy)}`).then(()=>toast("Скопійовано")).catch(()=>toast("Не вдалося скопіювати","er"))}
+    if(T.closest("#lcs")){const o=$("#lgo")._raw;if(!o)return;const q=s=>'"'+String(s).replace(/"/g,'""')+'"';
+      return dl("kalkulyator-"+Date.now()+".csv","\uFEFF"+"Сировина,Потрібно,На складі,Дефіцит,Ціна за од.,Джерело ціни,Вартість всього,Докупити на\n"+o.raw.map(y=>[q(y.n),y.nd,y.have,y.def,y.u.c==null?"":(y.u.c/100).toFixed(2),y.u.src||"",y.full==null?"":(y.full/100).toFixed(2),y.buy==null?"":(y.buy/100).toFixed(2)].join(",")).join("\n"))}
+    if(T.closest(".pr,input,button"))return;
+    if(x){const n=x.dataset.x;LG.open.has(n)?LG.open.delete(n):LG.open.add(n);calc()}};
+};
+})();
+</script>
+<!-- ====== кінець патча V11 ====== -->
 </body>
 </html>
