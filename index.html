@@ -3571,5 +3571,57 @@ function receipt(r){
 })();
 </script>
 <!-- ====== кінець патча V14 ====== -->
+  <!-- ====== ПАТЧ V15: вставити ПІСЛЯ патча V14, прямо ПЕРЕД </body> ====== -->
+<script>
+/*PATCH_V15 — меню крафту відкривається завжди; виконати крафт без ресурсів/вміння неможливо*/
+(function(){
+"use strict";
+
+/* ---------- 1. сторінка «Крафт»: кнопки більше не блокуються ---------- */
+VIEWS.craft=async function(v){
+  const t=S.cur;v.onclick=null;
+  v.innerHTML=`<div class="top"><h2>Крафт</h2></div>${noSrv()}<div class="tools"><input id="cq" placeholder="🔍 Пошук рецепта…" value="${esc(craftQ)}"><span class="chip ${craftOnly?"on":""}" id="co">✅ Можна створити</span></div><div class="chips" id="cc"></div><div class="grid" id="rg">${SK}</div>`;
+  await ready();if(t!==S.cur)return;
+  const can=r=>maxCy(r)>0;
+  const card=r=>{
+    if(r.na)return`<div class="card rc">${ph(r)}<h3>${esc(r.name)}</h3><span class="tag">Наразі недоступний</span><button class="btn" disabled>Створити</button></div>`;
+    const lock=lockR(r),m=maxCy(r);
+    const status=lock?`<span class="tag">🔒 Потрібне вміння ${r.skill} (у вас ${mySk()})</span>`
+      :`<div class="meta">${m>0?"✅ Можна зробити циклів: <b>"+m+"</b>":"⛔ Не вистачає ресурсів: перегляд доступний, крафт ні"}</div>`;
+    return`<div class="card rc"${lock||m<=0?' style="opacity:.88"':""}>${ph(r)}<h3>${esc(r.name)}</h3><div class="meta">Вміння: ${r.skill} · ${fmtT(r.time)} · вихід: ${r.yield} · на складі: <b>${stock(r.name)}</b></div>
+    ${Object.entries(r.ing).map(([n,q])=>`<div class="ing ${stock(n)<q?"bad":""}"><span>${esc(n)}</span><span>${stock(n)} / ${q}</span></div>`).join("")}
+    ${status}<button class="btn" data-r="${r.id}">${lock||m<=0?"Відкрити":"Створити"}</button></div>`};
+  const draw=()=>{const q=craftQ.trim().toLowerCase();
+    $("#cc").innerHTML=CATS.map((c,i)=>`<span class="chip ${!q&&i===craftCat?"on":""}" data-i="${i}">${ICON[i]} ${c}</span>`).join("");
+    const l=RECIPES.filter(r=>(q?r.name.toLowerCase().includes(q):r.cat===craftCat)&&(!craftOnly||can(r)));
+    $("#rg").innerHTML=l.map(card).join("")||'<p class="meta">Нічого не знайдено</p>'};
+  draw();
+  $("#cq").oninput=e=>{craftQ=e.target.value;draw()};
+  $("#co").onclick=e=>{craftOnly=!craftOnly;e.target.classList.toggle("on",craftOnly);draw()};
+  $("#cc").onclick=e=>{const i=e.target.closest("[data-i]")?.dataset.i;if(i!=null){craftCat=+i;craftQ="";$("#cq").value="";draw()}};
+  $("#rg").onclick=e=>{const id=e.target.closest("[data-r]")?.dataset.r;if(id)craftPanel(RECIPES.find(r=>r.id===id))};
+};
+
+/* ---------- 2. панель крафту: відкривається завжди, підтвердження заблоковане ---------- */
+const _cp=craftPanel;
+craftPanel=function(r){
+  const locked=lockR(r);
+  /* для рецептів із вищим вмінням відкриваємо панель з «нульовим» порогом, потім самі блокуємо крафт */
+  _cp(locked?Object.assign({},r,{skill:0}):r);
+  const m=document.querySelector(".pnl");if(!m)return;
+  const ok=m.querySelector("#ok");if(!ok)return;
+  if(locked){
+    const w=document.createElement("div");w.className="warn";
+    w.textContent="🔒 Потрібне вміння "+r.skill+" (у вас "+mySk()+"). Панель відкрита лише для перегляду.";
+    m.querySelector("#sm").before(w);
+    ok.addEventListener("click",e=>{e.stopImmediatePropagation();e.preventDefault()},true);
+    const keep=()=>{if(!ok.disabled)ok.disabled=true};
+    new MutationObserver(keep).observe(ok,{attributes:true,attributeFilter:["disabled"]});keep();
+    const mx=m.querySelector("#mx");if(mx)mx.disabled=true;
+  }
+};
+})();
+</script>
+<!-- ====== кінець патча V15 ====== -->
 </body>
 </html>
