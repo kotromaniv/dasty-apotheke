@@ -3623,5 +3623,38 @@ craftPanel=function(r){
 })();
 </script>
 <!-- ====== кінець патча V15 ====== -->
+  <!-- ====== ПАТЧ V16: вставити ПІСЛЯ патча V15, прямо ПЕРЕД </body> ====== -->
+<script>
+/*PATCH_V16 — склад без ліміту*/
+(function(){
+"use strict";
+/* 1. ліміт завжди 0 = «немає»: усі перевірки й підписи на сайті його ігнорують */
+try{Object.defineProperty(CONFIG,"CAPACITY",{get(){return 0},set(v){},configurable:true})}catch(e){}
+
+/* 2. прибрати поле «Ємність складу» з Налаштувань */
+const hide=()=>{
+  const i=document.getElementById("s_capacity");if(!i||i.dataset.gone)return;i.dataset.gone=1;
+  const l=i.previousElementSibling;if(l&&l.tagName==="LABEL")l.remove();i.remove();
+};
+const vw=document.getElementById("view");
+if(vw)new MutationObserver(hide).observe(vw,{childList:true,subtree:true});
+
+/* 3. зняти ліміт і на сервері: один раз після входу адміна */
+let done=false;
+const _show=showApp;
+showApp=function(){
+  _show();
+  setTimeout(async()=>{
+    if(done||S.preview||!CONFIG.API_URL||!isAdmin())return;
+    done=true;
+    try{
+      const s=await api("admin.settings");
+      if(s&&(+s.capacity||0)<1e9)await api("admin.settingsSave",{capacity:1e9});
+    }catch(e){}
+  },4000);
+};
+})();
+</script>
+<!-- ====== кінець патча V16 ====== -->
 </body>
 </html>
